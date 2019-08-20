@@ -690,6 +690,8 @@ def build_kernel(SOAPs1, SOAPs2, kernel='linear', zeta=1, width=1.0, nc=None):
         zeta: exponent for nonlinear kernel
     """
     sys.stdout.write('Building kernel...\n')
+    SOAPs1 = SOAPs1[:, 0:nc]
+    SOAPs2 = SOAPs2[:, 0:nc]
     if kernel == 'gaussian':
         d = cdist(SOAPs1, SOAPs2, metric='euclidean')
         k = gaussianKernel(d, width)

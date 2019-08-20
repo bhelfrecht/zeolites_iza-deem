@@ -90,6 +90,6 @@ if args.nr > 0:
     randomIdxs = range(0, nEnv)
     np.random.shuffle(randomIdxs)
     randomIdxs = randomIdxs[0:args.nr]
-    randomIdxs.sort()
+    #randomIdxs.sort()
     np.savetxt('%s/random.idxs' % args.output, randomIdxs, fmt='%d')
 
