@@ -14,7 +14,7 @@ parser.add_argument('-convert', type=str, choices=['stdout', 'file'], default=No
 
 args = parser.parse_args()
 
-### CONVERT FROM .NPY TO .DAT ###
+# Convert .npy binary files to text
 f = open(args.soap, 'r')
 inputFiles = f.readlines()
 inputFiles = [j.strip() for j in inputFiles]

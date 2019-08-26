@@ -45,7 +45,10 @@ parser.add_argument('-w', type=str, default=None,
 
 args = parser.parse_args()
 
+# Do regression if we are not
+# given regression weights
 if args.w is None:
+
     ### PROPERTY EXTRACTION ###
     # Extract structure properties
     sys.stdout.write('Extracting properties...\n')
@@ -65,17 +68,7 @@ if args.w is None:
         # Convert back to energy per Si
         p /= nAtoms/3
     elif args.p == 'volume':
-        #p /= nAtoms <-- originally decomposed environments with this,
-        #                but the wrong scaling in the kernel
-        #                (per atom instead of per Si)
-        #                cancels the error so the 
-        #                decomposed volumes are per Si
-        p /= nAtoms/3 # Gives volume per Si the "correct" way
-                      # Gives results consistent with the "incorrect"
-                      # way if the the regularization sigma
-                      # is multiplied by 9 (the jitter is scaled
-                      # "automatically" as it depends on the eigenvalues
-                      # of kernels)
+        p /= nAtoms/3
     
     # Shuffle training indices for each iteration
     randomIdxs = np.arange(0, len(structIdxs))
@@ -95,6 +88,8 @@ if args.w is None:
     ### PROPERTY REGRESSION ###
     # Perform property decomposition
     sys.stdout.write('Performing property regression...\n')
+
+    # Build desired kernels
     if args.kernel == 'gaussian':
         dMM = cdist(repSOAPs[:, 0:args.npca], 
                 repSOAPs[:, 0:args.npca], metric='euclidean')
@@ -102,6 +97,8 @@ if args.w is None:
         kNM = SOAPTools.build_sum_kernel_batch(inputFiles, 
                 repSOAPs[:, 0:args.npca],
                 structIdxs, kernel='gaussian', width=args.width, nc=args.npca)
+
+        # Build environment kernel, if required
         if args.env is True:
             envKernel = SOAPTools.build_kernel_batch(inputFiles, 
                     repSOAPs[:, 0:args.npca], 
@@ -114,17 +111,21 @@ if args.w is None:
         kNM = SOAPTools.build_sum_kernel_batch(inputFiles, 
                 repSOAPs[:, 0:args.npca],
                 structIdxs, kernel='laplacian', width=args.width, nc=args.npca)
+
+        # Build environment kernel, if required
         if args.env is True:
             envKernel = SOAPTools.build_kernel_batch(inputFiles, 
                     repSOAPs[:, 0:args.npca],
                     kernel='laplacian', width=args.width, 
                     nc=args.npca, lowmem=args.lowmem, output=args.output)
-    else: # standard soaps
+    else: # linear kernel
         kMM = SOAPTools.build_kernel(repSOAPs[:, 0:args.npca], 
                 repSOAPs[:, 0:args.npca], zeta=args.zeta)
         kNM = SOAPTools.build_sum_kernel_batch(inputFiles, 
                 repSOAPs[:, 0:args.npca], 
                 structIdxs, zeta=args.zeta, nc=args.npca)
+
+        # Build environment kernel, if required
         if args.env is True:
             envKernel = SOAPTools.build_kernel_batch(inputFiles, 
                     repSOAPs[:, 0:args.npca],
@@ -134,42 +135,42 @@ if args.w is None:
     if args.p == 'Energy_per_Si':
         kNM = (kNM.T*3/nAtoms).T
     else:
-        #kNM = (kNM.T/nAtoms).T <-- originally decomposed environments with this,
-        #                           but the wrong normalization in the kernel
-        #                           (per atom instead of per Si)
-        #                           cancels the error so the decomposed 
-        #                           volumes are per Si
-        kNM = (kNM.T*3/nAtoms).T # Gives volume per Si the "correct" way
-                                 # Gives results consistent with the "incorrect"
-                                 # way if the the regularization sigma
-                                 # is multiplied by 9 (the jitter is scaled
-                                 # "automatically" as it depends on the eigenvalues
-                                 # of kernels)
-    
+        kNM = (kNM.T*3/nAtoms).T
+
+    # Header for the output file with parameter information
+    # about the regression
     header = 'Kernel = %s, Width = %1.3E, Zeta = %1.3E, '\
             'Sigma = %1.3E, nPCA = %s, nTrain = %d, '\
             'Property = %s' % (args.kernel, args.width, args.zeta,
                     args.sigma, args.npca, args.ntrain, args.p)
+
+    # Perform KRR
     yTrain, yTest, yyTrain, yyTest, w \
             = SOAPTools.property_regression(p, kMM, kNM, 
                     len(structIdxs), trainIdxs, testIdxs, 
                     sigma=args.sigma, jitter=args.j, 
                     envKernel=envKernel, output=args.output)
     
+    # Save regression output as [True value, predicted value]
     np.savetxt('%s/yTrain.dat' % args.output, np.column_stack((yTrain, yyTrain)), header=header)
     np.savetxt('%s/yTest.dat' % args.output, 
             np.column_stack((yTest, yyTest)), header=header)
     np.savetxt('%s/w.dat' % args.output, w)
 
-else: # Projecting
+# Projecting from provided weights
+else:
     sys.stdout.write('Projecting properties...\n')
+
+    # Load weights
     w = np.loadtxt(args.w)
+
+    # Load SOAPs
     inputFiles = SOAPTools.read_input(args.soap)
     repIdxs = np.loadtxt(args.idxs, dtype=np.int)
     repSOAPs = SOAPTools.build_repSOAPs(inputFiles, repIdxs)
-
     projFiles = SOAPTools.read_input(args.project)
 
+    # Build desired kernels
     if args.kernel == 'gaussian':
         k = SOAPTools.build_kernel_batch(projFiles, 
                 repSOAPs[:, 0:args.npca], 
@@ -180,10 +181,11 @@ else: # Projecting
                 repSOAPs[:, 0:args.npca],
                 kernel='laplacian', width=args.width, 
                 nc=args.npca, lowmem=args.lowmem, output=args.output)
-    else: # standard soaps
+    else: # linear kernel
         k = SOAPTools.build_kernel_batch(projFiles, 
                 repSOAPs[:, 0:args.npca],
                 zeta=args.zeta, nc=args.npca, 
                 lowmem=args.lowmem, output=args.output)
 
+    # Perform projection with provided weights
     SOAPTools.property_regression_oos(w, k, output=args.output)

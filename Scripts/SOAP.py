@@ -79,6 +79,7 @@ soapStr = str('soap central_reference_all_species=F central_weight=%f ' \
                   args.c, args.cw, args.n, args.l, nrm, args.cs, args.cr, 
                   args.dexp, nZ, centersStr, nz, envStr))
 
+# Set the descriptor
 d = qp.descriptors.Descriptor(soapStr)
 al = qp.AtomsReader(args.structure)
 

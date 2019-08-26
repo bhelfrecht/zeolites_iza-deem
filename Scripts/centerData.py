@@ -12,6 +12,6 @@ parser.add_argument('-soap', type=str,
 
 args = parser.parse_args()
 
-### CENTER THE DATA ###
+# Center the data
 SOAPTools.center_data(args.soap)
 

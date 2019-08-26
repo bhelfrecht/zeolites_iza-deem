@@ -36,10 +36,11 @@ parser.add_argument('-output', type=str, default='.',
 args = parser.parse_args()
 
 ### BUILD PCA ###
+# Read inputs
 repIdxs = np.loadtxt(args.idxs, dtype=np.int)
-
 inputFiles = SOAPTools.read_input(args.soap)
 
+# Do KPCA projection with existing model
 if args.dotransform is not None:
     testFiles = SOAPTools.read_input(args.dotransform)
     eigenvectors = SOAPTools.read_input(args.w)
@@ -48,6 +49,8 @@ if args.dotransform is not None:
             args.mean, gfiles, eigenvectors,
             kernel=args.kernel, zeta=args.zeta, width=args.width,
             nPCA=args.pca, lowmem=args.lowmem, output=args.output)
+
+# Do KPCA construction and projection
 else:
     SOAPTools.sparse_kPCA(inputFiles, repIdxs, kernel=args.kernel,
             zeta=args.zeta, width=args.width, nPCA=args.pca,

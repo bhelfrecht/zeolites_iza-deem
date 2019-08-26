@@ -39,6 +39,7 @@ inputFiles = SOAPTools.read_input(args.deem)
 SOAPsA = SOAPTools.build_repSOAPs(inputFiles, repIdxs)
 
 # Read all IZA environments
+# (Assume small enough to fit in one batch)
 sys.stdout.write('Reading SOAPs B...\n')
 inputFiles = SOAPTools.read_input(args.iza)
 SOAPsB = []
@@ -48,10 +49,15 @@ SOAPsB = np.concatenate(SOAPsB)
 
 sys.stdout.write('Computing kernel distance...\n')
 
+# Compute DEEM-DEEM kernel
 kii = SOAPTools.build_kernel(SOAPsA, SOAPsA, kernel=args.kernel, 
         zeta=args.zeta, width=args.width, nc=args.npca)
+
+# Compute IZA-IZA kernel
 kjj = SOAPTools.build_kernel(SOAPsB, SOAPsB, kernel=args.kernel,
         zeta=args.zeta, width=args.width, nc=args.npca)
+
+# Compute DEEM-IZA kernel
 kij = SOAPTools.build_kernel(SOAPsA, SOAPsB, kernel=args.kernel,
         zeta=args.zeta, width=args.width, nc=args.npca)
 

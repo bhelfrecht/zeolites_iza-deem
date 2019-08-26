@@ -21,10 +21,17 @@ args = parser.parse_args()
 # Shuffle all indices
 structureIdxs = np.arange(0, args.nt)
 np.random.shuffle(structureIdxs)
+
+# Use a fraction f of the data
+# which will be further split into training
+# and validation sets
 randomIdxs = structureIdxs[0:int(args.nt*args.f)]
+
+# Use the remaining data for the independent tesst set
 testIdxs = structureIdxs[int(args.nt*args.f):]
 np.savetxt('%s/test.idxs' % args.output, np.sort(testIdxs), fmt='%d')
 
+# Size of each fold
 foldSize = int(float(len(randomIdxs))/args.k)
 
 # Fill the validation and train sets

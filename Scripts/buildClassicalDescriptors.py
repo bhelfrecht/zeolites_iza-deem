@@ -22,12 +22,19 @@ g = open(args.output, 'w')
 
 # Extract properties for each atom
 for i, at in enumerate(al):
+
+    # Parse atom properties for the structure
     P = np.asarray(at.properties[args.p].T)
+
+    # Sort the vector for angles and distances
+    # and write to output
     if args.p != 'rings':
         P.sort(axis=1)
         np.savetxt(g, np.flip(P, axis=1))
     else:
         np.savetxt(g, P[:, 1::2])
+
     sys.stdout.write('Frame: %d\r' % (i+1))
+
 sys.stdout.write('\n')
 g.close()
