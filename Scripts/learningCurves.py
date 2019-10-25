@@ -16,7 +16,7 @@ parser.add_argument('-soap', type=str, default='SOAPFiles.dat',
 parser.add_argument('-idxs', type=str, default='FPS.idxs', 
         help='File with FPS indices')
 parser.add_argument('-p', type=str, default='volume', 
-        choices=['volume', 'Energy_per_Si'], 
+        choices=['volume', 'Energy_per_Si', 'Energy_per_Si_Opt'], 
         help='Property name for regression')
 parser.add_argument('-Z', type=int, nargs='+', default=None, 
         help='Space separated atomic numbers of center species')
@@ -65,8 +65,14 @@ al = qp.AtomsReader(args.structure)
 structIdxs, nAtoms, volume, p \
         = SOAPTools.extract_structure_properties(al, args.Z, propName=args.p)
 
+np.savetxt('%s/props.dat' % args.output, p) #####
+
 # Scale property
-if args.p == 'Energy_per_Si':
+if args.p == 'volume':
+     p /= nAtoms/3 
+
+# Energies
+else:
 
     # Convert to total energy
     p *= nAtoms/3
@@ -76,8 +82,6 @@ if args.p == 'Energy_per_Si':
 
     # Convert back to energy per Si
     p /= nAtoms/3
-elif args.p == 'volume':
-     p /= nAtoms/3 
 
 # Get k-fold indices
 trainIdxs = np.loadtxt(args.train, dtype=np.int)
@@ -161,10 +165,7 @@ for idx, i in enumerate(args.pcalearn):
         # Scale the kernel matrices so that
         # they represent the average kernel
         # over the structure properties
-        if args.p == 'Energy_per_Si':
-            kNM = (kNM.T*3/nAtoms).T
-        else:
-            kNM = (kNM.T*3/nAtoms).T
+        kNM = (kNM.T*3/nAtoms).T
 
         # Compute learning curves for each set of hyperparameters
         for sdx, s in enumerate(args.sigma):
@@ -184,7 +185,7 @@ for idx, i in enumerate(args.pcalearn):
                         idxsValidate = validateIdxs[k]
 
                         # Perform the KRR
-                        yTrain, yTest, yyTrain, yyTest \
+                        yTrain, yTest, yyTrain, yyTest, _ \
                                 = SOAPTools.property_regression(p, kMM, kNM, 
                                         len(structIdxs), idxsTrain, 
                                         idxsValidate, sigma=s, 

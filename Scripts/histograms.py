@@ -31,7 +31,7 @@ args = parser.parse_args()
 ### DISTANCE COMPUTATION ###
 
 # Read SOAP vectors from file
-repIdxs = np.loadtxt(args.idxs, dtype=np.int)
+repIdxs = np.loadtxt(args.idxs, usecols=0, dtype=np.int)
 
 # Sample DEEM environments
 sys.stdout.write('Reading SOAPs A...\n')

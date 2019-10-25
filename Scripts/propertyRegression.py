@@ -16,7 +16,7 @@ parser.add_argument('-soap', type=str, default='SOAPFiles.dat',
 parser.add_argument('-idxs', type=str, default='FPS.idxs', 
         help='File with FPS indices')
 parser.add_argument('-p', type=str, default='volume', 
-        choices=['volume', 'Energy_per_Si'], 
+        choices=['volume', 'Energy_per_Si', 'Energy_per_Si_Opt'], 
         help='Property name for regression')
 parser.add_argument('-Z', type=int, nargs='+', default=None, 
         help='Space separated atomic numbers of center species')
@@ -57,7 +57,11 @@ if args.w is None:
             = SOAPTools.extract_structure_properties(al, args.Z, propName=args.p)
     
     # Scale property
-    if args.p == 'Energy_per_Si':
+    if args.p == 'volume':
+        p /= nAtoms/3
+
+    # Energies
+    else:
     
         # Convert to total energy
         p *= nAtoms/3
@@ -66,8 +70,6 @@ if args.w is None:
         p -= np.mean(p/nAtoms)*nAtoms
     
         # Convert back to energy per Si
-        p /= nAtoms/3
-    elif args.p == 'volume':
         p /= nAtoms/3
     
     # Shuffle training indices for each iteration
@@ -132,10 +134,7 @@ if args.w is None:
                     zeta=args.zeta, nc=args.npca, 
                     lowmem=args.lowmem, output=args.output)
     
-    if args.p == 'Energy_per_Si':
-        kNM = (kNM.T*3/nAtoms).T
-    else:
-        kNM = (kNM.T*3/nAtoms).T
+    kNM = (kNM.T*3/nAtoms).T
 
     # Header for the output file with parameter information
     # about the regression
