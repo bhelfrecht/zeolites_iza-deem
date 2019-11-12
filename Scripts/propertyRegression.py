@@ -169,6 +169,8 @@ else:
     repSOAPs = SOAPTools.build_repSOAPs(inputFiles, repIdxs)
     projFiles = SOAPTools.read_input(args.project)
 
+    # TODO: sum kernels instead of environment kernels for IZA properties?
+
     # Build desired kernels
     if args.kernel == 'gaussian':
         k = SOAPTools.build_kernel_batch(projFiles, 
