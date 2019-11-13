@@ -1209,14 +1209,14 @@ def kernel_distance(ii, jj, kij):
     
     # ii and jj are diagonals of kii and kjj kernels
     # kij is kernel between i and j
-    radicand = -2.0*kij + np.reshape(ii, (len(ii), 1)) + jj
+    radicand = -2.0*kij + np.reshape(ii, (-1, 1)) + jj
 
     # Handle machine precision errors around 0
     radicand[np.where(radicand < 0.0)] = 0.0
     D = np.sqrt(radicand)
     return D
 
-def kernel_histogram_rectangular(D, bins=200):
+def kernel_histogram_rectangular(D, bins=200, range=None):
     """
         Compute histogram of kernel-induced distances
         for rectangular kernel
@@ -1225,10 +1225,10 @@ def kernel_histogram_rectangular(D, bins=200):
         D: matrix of distances
         bins: number of histogram bins
     """
-    H, binEdges = np.histogram(D.flatten(), bins=bins, density=True)
+    H, binEdges = np.histogram(D.flatten(), bins=bins, range=range, density=True)
     return H, binEdges
 
-def kernel_histogram_square(D, bins=200):
+def kernel_histogram_square(D, bins=200, range=None):
     """
         Compute histogram of kernel-induced distances
         for square kernel
@@ -1239,12 +1239,14 @@ def kernel_histogram_square(D, bins=200):
     """
 
     # The distace matrix is symmetric, so we only
-    # need to look at half of it
+    # need to look at half of it. Use triu_indices
+    # instead of triu since it gives a flattened array
+    # of the upper triangle
     D = D[np.triu_indices(len(D))]
-    H, binEdges = np.histogram(D, bins=bins, density=True)
+    H, binEdges = np.histogram(D, bins=bins, range=range, density=True)
     return H, binEdges
 
-def kernel_histogram_min(D, bins=200, axis=None):
+def kernel_histogram_min(D, bins=200, range=None, axis=None):
     """
         Compute histogram of minimum kernel-induced distances
 
@@ -1256,6 +1258,5 @@ def kernel_histogram_min(D, bins=200, axis=None):
 
     # Compute minimum distance over the specified axis
     D = np.amin(D, axis=axis)
-    H, binEdges = np.histogram(D, bins=bins, density=True)
+    H, binEdges = np.histogram(D, bins=bins, range=range, density=True)
     return H, binEdges
-
