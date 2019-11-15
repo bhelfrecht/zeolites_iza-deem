@@ -1144,6 +1144,7 @@ def property_regression(y, kMM, kNM, nStruct, idxsTrain, idxsValidate,
     K = kMM*delta*sigma**2 + np.dot(kNM[idxsTrain].T, kNM[idxsTrain])*delta**2
     maxEigVal = np.amax(np.linalg.eigvalsh(K))
     K += np.eye(len(kMM))*maxEigVal*jitter
+    # TODO: center kernel relative to train set?
     Y = delta*np.dot(delta*kNM[idxsTrain].T, y[idxsTrain])
     w = np.linalg.solve(K, Y)
     
@@ -1171,7 +1172,7 @@ def property_regression(y, kMM, kNM, nStruct, idxsTrain, idxsValidate,
 
     return y[idxsTrain], y[idxsValidate], yy[idxsTrain], yy[idxsValidate], w
 
-def property_regression_oos(w, k, output='.'):
+def property_regression_oos_env(w, k, output='.'):
     """
         Project property contributions using existing
         regression weights
@@ -1197,6 +1198,19 @@ def property_regression_oos(w, k, output='.'):
         y = np.dot(ik, w)
         np.savetxt('%s/envProperties_proj.dat' % output, y)
 
+def property_regression_oos(w, k, y, output='.'):
+    """
+        Project structure properties using existing
+        regression weights
+
+        ---Arguments---
+        w: regression weights
+    """
+
+    yy = np.dot(k, w)
+    np.savetxt('%s/yProj.dat' % output, 
+            np.column_stack((y, yy)))
+
 def kernel_distance(ii, jj, kij):
     """
         Compute kernel induced distance
@@ -1216,7 +1230,7 @@ def kernel_distance(ii, jj, kij):
     D = np.sqrt(radicand)
     return D
 
-def kernel_histogram_rectangular(D, bins=200, range=None):
+def kernel_histogram_rectangular(D, bins=200):
     """
         Compute histogram of kernel-induced distances
         for rectangular kernel
@@ -1225,10 +1239,10 @@ def kernel_histogram_rectangular(D, bins=200, range=None):
         D: matrix of distances
         bins: number of histogram bins
     """
-    H, binEdges = np.histogram(D.flatten(), bins=bins, range=range, density=True)
+    H, binEdges = np.histogram(D.flatten(), bins=bins, density=True)
     return H, binEdges
 
-def kernel_histogram_square(D, bins=200, range=None):
+def kernel_histogram_square(D, bins=200):
     """
         Compute histogram of kernel-induced distances
         for square kernel
@@ -1241,12 +1255,13 @@ def kernel_histogram_square(D, bins=200, range=None):
     # The distace matrix is symmetric, so we only
     # need to look at half of it. Use triu_indices
     # instead of triu since it gives a flattened array
-    # of the upper triangle
-    D = D[np.triu_indices(len(D))]
-    H, binEdges = np.histogram(D, bins=bins, range=range, density=True)
+    # of the upper triangle. Use offset=1 to 
+    # exclude the zero-distances between identical environments
+    D = D[np.triu_indices(len(D), k=1)]
+    H, binEdges = np.histogram(D, bins=bins, density=True)
     return H, binEdges
 
-def kernel_histogram_min(D, bins=200, range=None, axis=None):
+def kernel_histogram_min(D, bins=200, axis=None):
     """
         Compute histogram of minimum kernel-induced distances
 
@@ -1258,5 +1273,5 @@ def kernel_histogram_min(D, bins=200, range=None, axis=None):
 
     # Compute minimum distance over the specified axis
     D = np.amin(D, axis=axis)
-    H, binEdges = np.histogram(D, bins=bins, range=range, density=True)
+    H, binEdges = np.histogram(D, bins=bins, density=True)
     return H, binEdges
