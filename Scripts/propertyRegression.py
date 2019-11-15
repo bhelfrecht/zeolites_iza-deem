@@ -62,35 +62,38 @@ if args.w is None or not args.env:
 # given regression weights
 if args.w is None:
 
-    # Scale property
-    if args.p == 'volume':
-        p /= nAtoms/3
-    
-    # Energies
-    else:
-    
-        # Convert to total energy
-        p *= nAtoms/3
-
-        # Save mean property
-        g = open('property_mean.dat', 'w')
-        g.write('%.16f' % np.mean(p/nAtoms))
-        g.close()
-
-        # Remove mean binding energy
-        p -= np.mean(p/nAtoms)*nAtoms
-    
-        # Convert back to energy per Si
-        p /= nAtoms/3
-
     # Shuffle training indices for each iteration
     randomIdxs = np.arange(0, len(structIdxs))
     np.random.shuffle(randomIdxs)
     trainIdxs = randomIdxs[0:args.ntrain]
     testIdxs = randomIdxs[args.ntrain:]
 
-    # TODO: center properties relative to train set?
+    # Scale property
+    if args.p == 'volume':
+        p /= nAtoms/3
+        p_mean = np.mean(p[trainIdxs])
+        p[trainIdxs] -= p_mean
+        p[testIdxs] -= p_mean
     
+    # Energies
+    else:
+    
+        # Convert to total energy
+        p *= nAtoms/3
+        p_mean = np.mean(p[trainIdxs]/nAtoms[trainIdxs])
+
+        # Remove mean binding energy
+        p[trainIdxs] -= p_mean*nAtoms[trainIdxs]
+        p[testIdxs] -= p_mean*nAtoms[testIdxs]
+
+        # Convert back to energy per Si
+        p /= nAtoms/3
+
+    # Save mean property
+    g = open('property_mean.dat', 'w')
+    g.write('%.16f' % p_mean)
+    g.close()
+
     # Select representative environments
     repIdxs = np.loadtxt(args.idxs, dtype=np.int)
     
@@ -148,7 +151,7 @@ if args.w is None:
                     lowmem=args.lowmem, output=args.output)
     
     kNM = (kNM.T*3/nAtoms).T
-    # TODO: center kernel?
+    # TODO: center kernels?
 
     # Header for the output file with parameter information
     # about the regression
@@ -225,21 +228,25 @@ else:
     if args.env:
         SOAPTools.property_regression_oos_env(w, k, output=args.output)
     else:
+
+        # Read mean
+        f = open(args.mean, 'r')
+        p_mean = float(f.readline().strip())
+        f.close()
+
         # Scale property
         if args.p == 'volume':
             p /= nAtoms/3
+            p -= p_mean
         
         # Energies
         else:
-            f = open(args.mean, 'r')
-            pmean = float(f.readline().strip())
-            f.close()
         
             # Convert to total energy
             p *= nAtoms/3
 
             # Remove mean binding energy
-            p -= pmean*nAtoms
+            p -= p_mean*nAtoms
         
             # Convert back to energy per Si
             p /= nAtoms/3
