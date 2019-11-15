@@ -47,6 +47,8 @@ parser.add_argument('-w', type=str, default=None,
         help='File with regression weights for projection')
 parser.add_argument('-mean', type=str, default=None,
         help='File with property mean for projection')
+parser.add_argument('-kref', type=str, default=None,
+        help='File containing the reference kernel for centering')
 
 args = parser.parse_args()
 
@@ -58,8 +60,8 @@ if args.w is None or not args.env:
     structIdxs, nAtoms, volume, p \
             = SOAPTools.extract_structure_properties(al, args.Z, propName=args.p)
         
-# Do regression if we are not
-# given regression weights
+# Do regression if we are not 
+# given regression weights 
 if args.w is None:
 
     # Shuffle training indices for each iteration
@@ -91,7 +93,7 @@ if args.w is None:
 
     # Save mean property
     g = open('property_mean.dat', 'w')
-    g.write('%.16f' % p_mean)
+    g.write('%.16f\n' % p_mean)
     g.close()
 
     # Select representative environments
@@ -151,7 +153,9 @@ if args.w is None:
                     lowmem=args.lowmem, output=args.output)
     
     kNM = (kNM.T*3/nAtoms).T
-    # TODO: center kernels?
+    #kMM = SOAPTools.center_kernel(kMM)
+    #kNM = SOAPTools.center_kernel(kNM, Kref=kMM)
+    #np.save('%s/kMM' % args.output, kMM)
 
     # Header for the output file with parameter information
     # about the regression
@@ -188,6 +192,7 @@ else:
     repIdxs = np.loadtxt(args.idxs, dtype=np.int)
     repSOAPs = SOAPTools.build_repSOAPs(inputFiles, repIdxs)
     projFiles = SOAPTools.read_input(args.project)
+    #k_ref = np.load(args.kref)
 
     # Build environment kernels
     if args.env:
@@ -207,6 +212,14 @@ else:
                     zeta=args.zeta, nc=args.npca, 
                     lowmem=args.lowmem, output=args.output)
 
+        #if isinstance(k, list):
+        #    for idx, i in enumerate(k):
+        #        ik = read_SOAP('%s.npy' % i)
+        #        ik = SOAPTools.center_kernel(ik, k_ref)
+        #        np.save('%s' % i, ik)
+        #else:
+        #    k = SOAPTools.center_kernel(k, k_ref)
+
     # Build structure kernels
     else:
         if args.kernel == 'gaussian':
@@ -223,6 +236,7 @@ else:
                     zeta=args.zeta, nc=args.npca)
 
         k = (k.T*3/nAtoms).T
+        #k = SOAPTools.center_kernel(k, k_ref)
 
     # Perform projection with provided weights
     if args.env:
