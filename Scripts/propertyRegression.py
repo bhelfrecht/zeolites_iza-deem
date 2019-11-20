@@ -153,6 +153,8 @@ if args.w is None:
                     lowmem=args.lowmem, output=args.output)
     
     kNM = (kNM.T*3/nAtoms).T
+
+    # Center kernel
     #kMM = SOAPTools.center_kernel(kMM)
     #kNM = SOAPTools.center_kernel(kNM, Kref=kMM)
     #np.save('%s/kMM' % args.output, kMM)
@@ -192,6 +194,8 @@ else:
     repIdxs = np.loadtxt(args.idxs, dtype=np.int)
     repSOAPs = SOAPTools.build_repSOAPs(inputFiles, repIdxs)
     projFiles = SOAPTools.read_input(args.project)
+
+    # Reference kernel for centering
     #k_ref = np.load(args.kref)
 
     # Build environment kernels
@@ -212,6 +216,7 @@ else:
                     zeta=args.zeta, nc=args.npca, 
                     lowmem=args.lowmem, output=args.output)
 
+        # Center environment kernels
         #if isinstance(k, list):
         #    for idx, i in enumerate(k):
         #        ik = read_SOAP('%s.npy' % i)
@@ -236,6 +241,8 @@ else:
                     zeta=args.zeta, nc=args.npca)
 
         k = (k.T*3/nAtoms).T
+
+        # Center structure kernel
         #k = SOAPTools.center_kernel(k, k_ref)
 
     # Perform projection with provided weights

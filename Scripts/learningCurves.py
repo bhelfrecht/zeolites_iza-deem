@@ -62,30 +62,14 @@ if args.kernel == 'linear':
 # Extract structure properties
 sys.stdout.write('Extracting properties...\n')
 al = qp.AtomsReader(args.structure)
-structIdxs, nAtoms, volume, p \
+structIdxs, nAtoms, volume, p_raw \
         = SOAPTools.extract_structure_properties(al, args.Z, propName=args.p)
-
-np.savetxt('%s/props.dat' % args.output, p) #####
-
-# Scale property
-if args.p == 'volume':
-     p /= nAtoms/3 
-
-# Energies
-else:
-
-    # Convert to total energy
-    p *= nAtoms/3
-
-    # Remove mean binding energy
-    p -= np.mean(p/nAtoms)*nAtoms
-
-    # Convert back to energy per Si
-    p /= nAtoms/3
 
 # Get k-fold indices
 trainIdxs = np.loadtxt(args.train, dtype=np.int)
 validateIdxs = np.loadtxt(args.validate, dtype=np.int)
+
+# (test indices not used anywhere)
 if args.test is not None:
     testIdxs = np.loadtxt(args.test, dtype=np.int)
 
@@ -183,6 +167,27 @@ for idx, i in enumerate(args.pcalearn):
                             np.random.shuffle(trainIdxs[k])
                         idxsTrain = trainIdxs[k, 0:n]
                         idxsValidate = validateIdxs[k]
+
+                        # Scale property
+                        if args.p == 'volume':
+                             p = p_raw/(nAtoms/3)
+                             p_mean = np.mean(p[idxsTrain])
+                             p[idxsTrain] -= p_mean
+                             p[idxsValidate] -= p_mean
+                        
+                        # Energies
+                        else:
+                        
+                            # Convert to total energy
+                            p = p_raw*(nAtoms/3)
+                            p_mean = np.mean(p[idxsTrain]/nAtoms[idxsTrain])
+                        
+                            # Remove mean binding energy
+                            p[idxsTrain] -= p_mean*nAtoms[idxsTrain]
+                            p[idxsValidate] -= p_mean*nAtoms[idxsValidate]
+                        
+                            # Convert back to energy per Si
+                            p /= nAtoms/3
 
                         # Perform the KRR
                         yTrain, yTest, yyTrain, yyTest, _ \
