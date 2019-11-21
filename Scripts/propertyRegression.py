@@ -49,6 +49,8 @@ parser.add_argument('-mean', type=str, default=None,
         help='File with property mean for projection')
 parser.add_argument('-kref', type=str, default=None,
         help='File containing the reference kernel for centering')
+parser.add_argument('-test', type=str, default=None,
+        help='File containing indices for testing')
 
 args = parser.parse_args()
 
@@ -64,11 +66,18 @@ if args.w is None or not args.env:
 # given regression weights 
 if args.w is None:
 
-    # Shuffle training indices for each iteration
-    randomIdxs = np.arange(0, len(structIdxs))
-    np.random.shuffle(randomIdxs)
-    trainIdxs = randomIdxs[0:args.ntrain]
-    testIdxs = randomIdxs[args.ntrain:]
+    # Train-test split if no test indices supplied
+    if args.test is None:
+        randomIdxs = np.arange(0, len(structIdxs))
+        np.random.shuffle(randomIdxs)
+        trainIdxs = randomIdxs[0:args.ntrain]
+        testIdxs = randomIdxs[args.ntrain:]
+
+    # Train-test split with test indices supplied
+    else:
+        testIdxs = np.loadtxt(args.test, dtype=np.int)
+        trainIdxs = np.arange(0, len(structIdxs))
+        trainIdxs = np.delete(trainIdxs, testIdxs)
 
     # Scale property
     if args.p == 'volume':
@@ -92,7 +101,7 @@ if args.w is None:
         p /= nAtoms/3
 
     # Save mean property
-    g = open('property_mean.dat', 'w')
+    g = open('%s/property_mean.dat' % args.output, 'w')
     g.write('%.16f\n' % p_mean)
     g.close()
 
