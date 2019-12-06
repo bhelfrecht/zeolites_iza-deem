@@ -151,6 +151,11 @@ for idx, i in enumerate(args.pcalearn):
         # over the structure properties
         kNM = (kNM.T*3/nAtoms).T
 
+        #####
+        #kMM = SOAPTools.center_kernel(kMM) 
+        #kNM = SOAPTools.center_kernel(kNM, Kref=kMM)
+        #####
+
         # Compute learning curves for each set of hyperparameters
         for sdx, s in enumerate(args.sigma):
             sys.stdout.write('---> Sigma: %.2e\n' % s)
@@ -197,11 +202,14 @@ for idx, i in enumerate(args.pcalearn):
                                         envKernel=envKernel, jitter=j,
                                         output=args.output)
 
+
                         # Write out some debug error info
                         #np.savetxt('yTrain-PCA%d-%d-%d.dat' % (i, n, k),
                         #        np.column_stack((yTrain, yyTrain)))
                         #np.savetxt('yTest-PCA%d-%d-%d.dat' % (i, n, k),
                         #        np.column_stack((yTest, yyTest)))
+                        #np.savetxt('yTrain-%d.dat' % k, np.column_stack((yTrain, yyTrain)))
+                        #np.savetxt('yTest-%d.dat' % k, np.column_stack((yTest, yyTest)))
 
                         # Build the error matrices (see analysis notebooks
                         # for full explanation of the matrix structure)
@@ -243,6 +251,40 @@ for idx, i in enumerate(args.pcalearn):
                         for ydx, y in enumerate([i, w, s, j, n]):
                             x[idx, wdx, sdx, jdx, ndx, ydx] = y
                     sys.stdout.write('\n')
+
+                #####
+                    # Scale property
+                    #_idxsTrain = np.arange(0, 10000)
+                    #_idxsTrain = np.delete(_idxsTrain, testIdxs)
+                    #if args.p == 'volume':
+                    #     p = p_raw/(nAtoms/3)
+                    #     p_mean = np.mean(p[_idxsTrain])
+                    #     p[_idxsTrain] -= p_mean
+                    #     p[testIdxs] -= p_mean
+                    #
+                    ## Energies
+                    #else:
+                    #
+                    #    # Convert to total energy
+                    #    p = p_raw*(nAtoms/3)
+                    #    p_mean = np.mean(p[_idxsTrain]/nAtoms[_idxsTrain])
+                    #
+                    #    # Remove mean binding energy
+                    #    p[_idxsTrain] -= p_mean*nAtoms[_idxsTrain]
+                    #    p[testIdxs] -= p_mean*nAtoms[testIdxs]
+                    #
+                    #    # Convert back to energy per Si
+                    #    p /= nAtoms/3
+                    #_yTrain, _yTest, _yyTrain, _yyTest, _ \
+                    #        = SOAPTools.property_regression(p, kMM, kNM, 
+                    #                len(structIdxs), _idxsTrain, 
+                    #                testIdxs, sigma=s, 
+                    #                envKernel=envKernel, jitter=j,
+                    #                output=args.output)
+
+                    #np.savetxt('yTrainLC.dat', np.column_stack((_yTrain, _yyTrain)))
+                    #np.savetxt('yTestLC.dat', np.column_stack((_yTest, _yyTest)))
+                    #####
 
 # Save error matrices to file
 np.save('%s/maeAvgTrain.npy' % args.output, maeAvgTrain)

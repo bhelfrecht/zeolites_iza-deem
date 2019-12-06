@@ -563,121 +563,125 @@ def sparse_kPCA_transform(inputFilesTrain, inputFilesTest, GMeanFile, GFiles, UF
         output: output directory
     """
 
-    # Number of batches
-    N = 0
-
-    # Sum of kernel between the test data and the train data
-    kTN_sum = 0
-
-    # Read the test data
-    tSOAP = read_SOAP(inputFilesTest[0])
-    T = tSOAP.shape[0]
-
-    # Build kernel between the test data and the train data
-    kTN = build_kernel_batch(inputFilesTrain, tSOAP, kernel='gaussian', 
-            zeta=zeta, width=width, nc=nPCA, lowmem=lowmem, output=output)
-
-    sys.stdout.write('Computing column sum of projection kernel...\n')
-    sys.stdout.flush()
-
-    # Loop over the kernels
-    for fdx, f in enumerate(kTN):
-        kTNi = np.transpose(np.load('%s.npy' % f))
-
-        # Sum the number of training environments
-        N += kTNi.shape[1]
-
-        # First batch
-        if fdx == 0:
-            kTN_sum = np.sum(kTNi, axis=1)
-
-        # Subsequent batches
-        else:
-            kTN_sum += np.sum(kTNi, axis=1)
-
-        sys.stdout.write('Batch: %d\r' % (fdx+1))
-        sys.stdout.flush()
-
-    sys.stdout.write('\n')
-
-    # Mean of the test-train kernel
-    kTN_sum /= N
-
-    # Load mean of G matrix
-    Gmean = np.load(GMeanFile)
-
-    sys.stdout.write('Computing sum of training kernel...\n')
-    sys.stdout.flush()
-
-    # Prepare computation of kernel between all training environments
-    kNN_sum = np.dot(Gmean, Gmean)
-    kNN_rowsum = []
-
-    sys.stdout.write('Computing column sum of training kernel...\n')
-    sys.stdout.flush()
-
-    # For each batch in the G matrix, compute the row sum
-    # of the train-train kernel kNN
-    for gdx, g in enumerate(GFiles):
-        Gi = np.load(g)
-        kNN_rowsum.append(np.dot(Gmean, Gi.T))
-        sys.stdout.write('Batch: %d\r' % (gdx+1))
-        sys.stdout.flush()
-
-    sys.stdout.write('\n')
-
-    # Row sum of train-train kernel
-    kNN_rowsum = np.concatenate(kNN_rowsum)
-        
-    # Auxiliary matrices used in centering
-    T1 = np.ones((T, 1))
-    N1 = np.ones((1, N))
-
-    # Reshape the matrices in preparation for centering
-    kNN_rowsum = np.reshape(kNN_rowsum, ((1, N)))
-    kTN_sum = np.reshape(kTN_sum, ((T, 1)))
-
-    # Initialize count of training environments
-    # and prepare output files
-    Nt = 0
+    # Prepare output file
     kout = open('%s/projFiles.dat' % os.path.abspath(output), 'w')
 
-    sys.stdout.write('Centering and projecting...\n')
-    projection = 0
+    # Read the test data
+    for tdx, t in enumerate(inputFilesTest):
+        sys.stdout.write('Test batch: %d\n' % (tdx+1))
+        tSOAP = read_SOAP(t)
+        T = tSOAP.shape[0]
 
-    # Loop over all batches of the test-train kernel
-    for fdx, f in enumerate(kTN):
+        # Build kernel between the test data and the train data
+        kTN = build_kernel_batch(inputFilesTrain, tSOAP, kernel='gaussian', 
+                zeta=zeta, width=width, nc=nPCA, lowmem=lowmem, output=output)
 
-        # Load the kernel and center
-        kTNi = np.transpose(np.load('%s.npy' % f))
-        Ni = kTNi.shape[1]
-        kTNi -= np.dot(kTN_sum, N1[:, Nt:Nt+Ni]) \
-                + np.dot(T1, kNN_rowsum[:, Nt:Nt+Ni]) \
-                - kNN_sum*np.dot(T1, N1[:, Nt:Nt+Ni])
-
-        # Load the corresponding eigenvectors
-        Ui = read_SOAP(UFiles[fdx])
-        Ui = Ui[:, 0:nPCA]
-
-        # Compute the projection
-        if fdx == 0:
-            projection = np.dot(kTNi, Ui)
-        else:
-            projection += np.dot(kTNi, Ui)
-
-        # Remove intermediate files
-        os.system('rm %s/k%d.npy' % (output, fdx))
-
-        Nt += Ni
-
-        sys.stdout.write('Batch: %d\r' % (fdx+1))
+        sys.stdout.write('Computing column sum of projection kernel...\n')
         sys.stdout.flush()
 
-    # Save projections
-    np.save('%s/kpca_proj' % output, projection)
-    kout.write('%s/kpca_proj.npy\n' % os.path.abspath(output))
+        # Number of training batches
+        N = 0
 
-    sys.stdout.write('\n')
+        # Sum of kernel between the test data and the train data
+        kTN_sum = 0
+
+        # Loop over the kernels
+        for fdx, f in enumerate(kTN):
+            kTNi = np.transpose(np.load('%s.npy' % f))
+
+            # Sum the number of training environments
+            N += kTNi.shape[1]
+
+            # First batch
+            if fdx == 0:
+                kTN_sum = np.sum(kTNi, axis=1)
+
+            # Subsequent batches
+            else:
+                kTN_sum += np.sum(kTNi, axis=1)
+
+            sys.stdout.write('Train batch: %d\r' % (fdx+1))
+            sys.stdout.flush()
+
+        sys.stdout.write('\n')
+
+        # Mean of the test-train kernel
+        kTN_sum /= N
+
+        # Load mean of G matrix
+        Gmean = np.load(GMeanFile)
+
+        sys.stdout.write('Computing sum of training kernel...\n')
+        sys.stdout.flush()
+
+        # Prepare computation of kernel between all training environments
+        kNN_sum = np.dot(Gmean, Gmean)
+        kNN_rowsum = []
+
+        sys.stdout.write('Computing column sum of training kernel...\n')
+        sys.stdout.flush()
+
+        # For each batch in the G matrix, compute the row sum
+        # of the train-train kernel kNN
+        for gdx, g in enumerate(GFiles):
+            Gi = np.load(g)
+            kNN_rowsum.append(np.dot(Gmean, Gi.T))
+            sys.stdout.write('Batch: %d\r' % (gdx+1))
+            sys.stdout.flush()
+
+        sys.stdout.write('\n')
+
+        # Row sum of train-train kernel
+        kNN_rowsum = np.concatenate(kNN_rowsum)
+            
+        # Auxiliary matrices used in centering
+        T1 = np.ones((T, 1))
+        N1 = np.ones((1, N))
+
+        # Reshape the matrices in preparation for centering
+        kNN_rowsum = np.reshape(kNN_rowsum, ((1, N)))
+        kTN_sum = np.reshape(kTN_sum, ((T, 1)))
+
+        # Initialize count of training environments
+        Nt = 0
+
+        sys.stdout.write('Centering and projecting...\n')
+        projection = 0
+
+        # Loop over all batches of the test-train kernel
+        for fdx, f in enumerate(kTN):
+
+            # Load the kernel and center
+            kTNi = np.transpose(np.load('%s.npy' % f))
+            Ni = kTNi.shape[1]
+            kTNi -= np.dot(kTN_sum, N1[:, Nt:Nt+Ni]) \
+                    + np.dot(T1, kNN_rowsum[:, Nt:Nt+Ni]) \
+                    - kNN_sum*np.dot(T1, N1[:, Nt:Nt+Ni])
+
+            # Load the corresponding eigenvectors
+            Ui = read_SOAP(UFiles[fdx])
+            Ui = Ui[:, 0:nPCA]
+
+            # Compute the projection
+            if fdx == 0:
+                projection = np.dot(kTNi, Ui)
+            else:
+                projection += np.dot(kTNi, Ui)
+
+            # Remove intermediate files
+            os.system('rm %s/k%d.npy' % (output, fdx))
+
+            Nt += Ni
+
+            sys.stdout.write('Batch: %d\r' % (fdx+1))
+            sys.stdout.flush()
+
+        # Save projections
+        np.save('%s/kpca_proj-%d' % (output, tdx), projection)
+        kout.write('%s/kpca_proj-%d.npy\n' % (os.path.abspath(output), tdx)) 
+
+        sys.stdout.write('\n')
+
     kout.close()
 
 def sparse_kPCA(inputFiles, repIdxs, kernel='gaussian', zeta=1, width=1.0, 
@@ -1142,11 +1146,12 @@ def property_regression(y, kMM, kNM, nStruct, idxsTrain, idxsValidate,
     # Solve KRR problem
     delta = np.var(y)*len(kMM)/np.trace(kMM)
     K = kMM*delta*sigma**2 + np.dot(kNM[idxsTrain].T, kNM[idxsTrain])*delta**2
-    maxEigVal = np.amax(np.linalg.eigvalsh(K))
-    K += np.eye(len(kMM))*maxEigVal*jitter
+    #maxEigVal = np.amax(np.linalg.eigvalsh(K))
+    #K += np.eye(len(kMM))*maxEigVal*jitter
     # TODO: center kernel relative to train set?
     Y = delta*np.dot(delta*kNM[idxsTrain].T, y[idxsTrain])
-    w = np.linalg.solve(K, Y)
+    #w = np.linalg.solve(K, Y)
+    w = np.dot(np.linalg.pinv(K, rcond=jitter), Y)
     
     # Predict structure properties
     yy = np.dot(kNM, w)
@@ -1161,6 +1166,7 @@ def property_regression(y, kMM, kNM, nStruct, idxsTrain, idxsValidate,
                 iKernel = read_SOAP('%s.npy' % i)
                 yyEnv = np.dot(iKernel, w)
                 np.savetxt('%s/envProperties-%d.dat' % (output, idx), yyEnv)
+                os.system('rm %s.npy' % i)
 
         # Environment kernel is a single array
         else:
