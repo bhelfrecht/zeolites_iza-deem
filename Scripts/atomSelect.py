@@ -51,9 +51,9 @@ for sdx, s in enumerate(structure_indices):
     n_cell = np.floor(n_rep*n_rep*n_rep/2)
     new_idx = n_cell*n_atoms+atom_indices[sdx]
     new_idx = int(new_idx)
-    print "===== Environment", env_indices[sdx], "====="
-    print "Index in %dx%dx%d replicated structure: %d" % (n_rep, n_rep,
-            n_rep, new_idx)
+    print("===== Environment", env_indices[sdx], "=====")
+    print("Index in %dx%dx%d replicated structure: %d" % (n_rep, n_rep,
+            n_rep, new_idx))
 
     aseIO.write('%s_%dx%dx%d.xyz' % (structures[sdx], n_rep, n_rep, n_rep), 
             al_rep, format='extxyz')

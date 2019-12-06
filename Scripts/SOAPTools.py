@@ -871,7 +871,7 @@ def npy_stdout(fileList):
         data = np.load(i)
         n += len(data)
         for j in data:
-            print '    '.join(map(str, j))
+            print('    '.join(map(str, j)))
 
 def extract_structure_properties(al, Z, propName=None):
     """
