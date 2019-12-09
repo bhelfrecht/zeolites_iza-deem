@@ -5,6 +5,7 @@ import sys
 import argparse
 import random
 import quippy as qp
+import ase.io as aseIO
 import numpy as np
 import SOAPTools
 
@@ -81,7 +82,8 @@ soapStr = str('soap central_reference_all_species=F central_weight=%f ' \
 
 # Set the descriptor
 d = qp.descriptors.Descriptor(soapStr)
-al = qp.AtomsReader(args.structure)
+#al = qp.AtomsReader(args.structure)
+al = aseIO.read(args.structure, index=':')
 
 # Compute SOAP vectors for the input structure
 SOAPTools.compute_SOAPs(al, d, idxs=idxs, 

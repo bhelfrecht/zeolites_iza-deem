@@ -2,7 +2,8 @@
 
 import os
 import sys
-import quippy as qp
+#import quippy as qp
+import ase.io as aseIO
 import numpy as np
 import argparse
 
@@ -22,7 +23,8 @@ parser.add_argument('-ap', type=str, default=[], nargs='+',
 args = parser.parse_args()
 
 # Load atoms list
-al = qp.AtomsReader(args.input)
+#al = qp.AtomsReader(args.input)
+al = aseIO.read(args.input, index=':')
 
 # Open output file for writing
 f = open(args.output, 'w')
@@ -40,13 +42,15 @@ for i, at in enumerate(al):
     # Parse the desired structure properties
     structureProperties = []
     for sp in args.sp:
-        structureProperties.append(at.params[sp])
+        #structureProperties.append(at.params[sp])
+        structureProperties.append(at.info[sp])
     v = np.linalg.det(at.cell)
 
     # Parse the desired atom properties (Fortran indexed)
     atomProperties = []
     for ap in args.ap:
-        atomProperties.append(at.properties[ap])
+        #atomProperties.append(at.properties[ap])
+        atomProperties.append(at.arrays[ap])
 
     for j, aa in enumerate(at):
         line = []

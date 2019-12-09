@@ -237,9 +237,10 @@ def compute_SOAPs(al, d, idxs=None, batchSize=0,
 
         # Set the calculation cutoff
         # and calculate the SOAP vector
-        at.set_cutoff(d.cutoff())
-        at.calc_connect()
-        SOAP = d.calc(at)['descriptor']
+        #at.set_cutoff(d.cutoff())
+        #at.calc_connect()
+        #SOAP = d.calc(at)['descriptor']
+        SOAP = d.calc(at, cutoff=d.cutoff())['data']
 
         # Retain the specified indices
         if idxs is not None:
