@@ -3,7 +3,8 @@
 import os
 import sys
 import argparse
-import quippy as qp
+import ase.io as aseIO
+#import quippy as qp
 import numpy as np
 from scipy.spatial.distance import cdist
 import SOAPTools
@@ -61,7 +62,8 @@ if args.kernel == 'linear':
 ### PROPERTY EXTRACTION ###
 # Extract structure properties
 sys.stdout.write('Extracting properties...\n')
-al = qp.AtomsReader(args.structure)
+#al = qp.AtomsReader(args.structure)
+al = aseIO.read(args.structure, index=':')
 structIdxs, nAtoms, volume, p_raw \
         = SOAPTools.extract_structure_properties(al, args.Z, propName=args.p)
 
@@ -172,13 +174,17 @@ for idx, i in enumerate(args.pcalearn):
                             np.random.shuffle(trainIdxs[k])
                         idxsTrain = trainIdxs[k, 0:n]
                         idxsValidate = validateIdxs[k]
+                        #print(idxsTrain.shape)
+                        #print(idxsValidate.shape)
+                        #print(np.intersect1d(idxsTrain, idxsValidate))
 
                         # Scale property
                         if args.p == 'volume':
                              p = p_raw/(nAtoms/3)
                              p_mean = np.mean(p[idxsTrain])
-                             p[idxsTrain] -= p_mean
-                             p[idxsValidate] -= p_mean
+                             #p[idxsTrain] -= p_mean
+                             #p[idxsValidate] -= p_mean
+                             p -= p_mean
                         
                         # Energies
                         else:
@@ -188,11 +194,13 @@ for idx, i in enumerate(args.pcalearn):
                             p_mean = np.mean(p[idxsTrain]/nAtoms[idxsTrain])
                         
                             # Remove mean binding energy
-                            p[idxsTrain] -= p_mean*nAtoms[idxsTrain]
-                            p[idxsValidate] -= p_mean*nAtoms[idxsValidate]
+                            #p[idxsTrain] -= p_mean*nAtoms[idxsTrain]
+                            #p[idxsValidate] -= p_mean*nAtoms[idxsValidate]
+                            p -= p_mean*nAtoms
                         
                             # Convert back to energy per Si
                             p /= nAtoms/3
+                            #np.savetxt('props-cv.dat', p)
 
                         # Perform the KRR
                         yTrain, yTest, yyTrain, yyTest, _ \
@@ -201,7 +209,6 @@ for idx, i in enumerate(args.pcalearn):
                                         idxsValidate, sigma=s, 
                                         envKernel=envKernel, jitter=j,
                                         output=args.output)
-
 
                         # Write out some debug error info
                         #np.savetxt('yTrain-PCA%d-%d-%d.dat' % (i, n, k),
@@ -215,8 +222,12 @@ for idx, i in enumerate(args.pcalearn):
                         # for full explanation of the matrix structure)
                         maeTrain[k, idx, wdx, sdx, jdx, ndx, -1] \
                                 = SOAPTools.MAE(yyTrain, yTrain)
+                        #print(SOAPTools.MAE(yyTrain, yTrain))
+                        #print(np.mean(np.abs(yyTrain-yTrain)))
                         maeTest[k, idx, wdx, sdx, jdx, ndx, -1] \
                                 = SOAPTools.MAE(yyTest, yTest)
+                        #print(SOAPTools.MAE(yyTest, yTest))
+                        #print(np.mean(np.abs(yyTest-yTest)))
                         rmseTrain[k, idx, wdx, sdx, jdx, ndx, -1] \
                                 = SOAPTools.RMSE(yyTrain, yTrain)
                         rmseTest[k, idx, wdx, sdx, jdx, ndx, -1] \
@@ -252,15 +263,16 @@ for idx, i in enumerate(args.pcalearn):
                             x[idx, wdx, sdx, jdx, ndx, ydx] = y
                     sys.stdout.write('\n')
 
-                #####
+                    #####
                     # Scale property
                     #_idxsTrain = np.arange(0, 10000)
                     #_idxsTrain = np.delete(_idxsTrain, testIdxs)
                     #if args.p == 'volume':
                     #     p = p_raw/(nAtoms/3)
                     #     p_mean = np.mean(p[_idxsTrain])
-                    #     p[_idxsTrain] -= p_mean
-                    #     p[testIdxs] -= p_mean
+                    #     #p[_idxsTrain] -= p_mean
+                    #     #p[testIdxs] -= p_mean
+                    #     p -= p_mean
                     #
                     ## Energies
                     #else:
@@ -270,11 +282,13 @@ for idx, i in enumerate(args.pcalearn):
                     #    p_mean = np.mean(p[_idxsTrain]/nAtoms[_idxsTrain])
                     #
                     #    # Remove mean binding energy
-                    #    p[_idxsTrain] -= p_mean*nAtoms[_idxsTrain]
-                    #    p[testIdxs] -= p_mean*nAtoms[testIdxs]
+                    #    #p[_idxsTrain] -= p_mean*nAtoms[_idxsTrain]
+                    #    #p[testIdxs] -= p_mean*nAtoms[testIdxs]
+                    #    p -= p_mean*nAtoms
                     #
                     #    # Convert back to energy per Si
                     #    p /= nAtoms/3
+                    #    np.savetxt('props.dat', p)
                     #_yTrain, _yTest, _yyTrain, _yyTest, _ \
                     #        = SOAPTools.property_regression(p, kMM, kNM, 
                     #                len(structIdxs), _idxsTrain, 
@@ -284,6 +298,8 @@ for idx, i in enumerate(args.pcalearn):
 
                     #np.savetxt('yTrainLC.dat', np.column_stack((_yTrain, _yyTrain)))
                     #np.savetxt('yTestLC.dat', np.column_stack((_yTest, _yyTest)))
+                    #print(np.mean(np.abs(_yTrain-_yyTrain)))
+                    #print(np.mean(np.abs(_yTest-_yyTest)))
                     #####
 
 # Save error matrices to file
