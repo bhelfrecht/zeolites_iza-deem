@@ -3,7 +3,8 @@
 import os
 import sys
 import argparse
-import quippy as qp
+#import quippy as qp
+import ase.io as aseIO
 import numpy as np
 from scipy.spatial.distance import cdist
 import SOAPTools
@@ -58,7 +59,8 @@ if args.w is None or not args.env:
 
     # Extract structure properties
     sys.stdout.write('Extracting properties...\n')
-    al = qp.AtomsReader(args.structure)
+    #al = qp.AtomsReader(args.structure)
+    al = aseIO.read(args.structure, index=':')
     structIdxs, nAtoms, volume, p \
             = SOAPTools.extract_structure_properties(al, args.Z, propName=args.p)
         
@@ -83,8 +85,9 @@ if args.w is None:
     if args.p == 'volume':
         p /= nAtoms/3
         p_mean = np.mean(p[trainIdxs])
-        p[trainIdxs] -= p_mean
-        p[testIdxs] -= p_mean
+        #p[trainIdxs] -= p_mean
+        #p[testIdxs] -= p_mean
+        p -= p_mean
     
     # Energies
     else:
@@ -94,8 +97,9 @@ if args.w is None:
         p_mean = np.mean(p[trainIdxs]/nAtoms[trainIdxs])
 
         # Remove mean binding energy
-        p[trainIdxs] -= p_mean*nAtoms[trainIdxs]
-        p[testIdxs] -= p_mean*nAtoms[testIdxs]
+        #p[trainIdxs] -= p_mean*nAtoms[trainIdxs]
+        #p[testIdxs] -= p_mean*nAtoms[testIdxs]
+        p -= p_mean*nAtoms
 
         # Convert back to energy per Si
         p /= nAtoms/3
