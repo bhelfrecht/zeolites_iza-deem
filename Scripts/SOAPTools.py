@@ -449,6 +449,22 @@ def read_SOAP(SOAPFile):
         iSOAP = np.loadtxt(SOAPFile)
     return iSOAP
 
+def read_properties(file_list):
+    """
+        Read the property data from multiple
+        files and return a concatenated
+        array of the properties
+
+        ---Arguments---
+        file_list: ordered list of file names
+            (they will be concatenated in the order given)
+    """
+
+    properties = []
+    for f in file_list:
+        properties.extend(np.loadtxt(f))
+    return np.asarray(properties)
+
 def center_data(SOAPFile):
     """
         Read and center the batched data
@@ -920,7 +936,8 @@ def extract_structure_properties(al, Z, propName=None):
 
         # Append additional property
         if propName != 'volume':
-            p[i] = at.params[propName]
+            #p[i] = at.params[propName]
+            p[i] = at.info[propName]
         else:
             p[i] = volume[i]
 
@@ -1145,14 +1162,13 @@ def property_regression(y, kMM, kNM, nStruct, idxsTrain, idxsValidate,
     """
 
     # Solve KRR problem
-    delta = np.var(y)*len(kMM)/np.trace(kMM)
+    delta = np.var(y[idxsTrain])*len(kMM)/np.trace(kMM)
     K = kMM*delta*sigma**2 + np.dot(kNM[idxsTrain].T, kNM[idxsTrain])*delta**2
-    #maxEigVal = np.amax(np.linalg.eigvalsh(K))
-    #K += np.eye(len(kMM))*maxEigVal*jitter
+    maxEigVal = np.amax(np.linalg.eigvalsh(K))
+    K += np.eye(len(kMM))*maxEigVal*jitter
     # TODO: center kernel relative to train set?
     Y = delta*np.dot(delta*kNM[idxsTrain].T, y[idxsTrain])
-    #w = np.linalg.solve(K, Y)
-    w = np.dot(np.linalg.pinv(K, rcond=jitter), Y)
+    w = np.linalg.solve(K, Y)
     
     # Predict structure properties
     yy = np.dot(kNM, w)
