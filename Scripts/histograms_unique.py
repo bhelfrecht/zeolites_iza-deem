@@ -71,7 +71,7 @@ if args.batchsize is None:
 else:
     batchsize = args.batchsize
 
-n_batches = SOAPsD.shape[0]/batchsize
+n_batches = SOAPsD.shape[0]//batchsize
 if SOAPsD.shape[0] % batchsize != 0:
     n_batches += 1
 
