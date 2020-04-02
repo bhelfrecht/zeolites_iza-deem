@@ -15,7 +15,7 @@ def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
     f = h5py.File(filename, 'r')
 
     if datasets is not None:
-        for dataset name in datasets:
+        for dataset_name in datasets:
             structure_values.append(f[dataset_name][:])
     else:
         for structure_value in f.values():
