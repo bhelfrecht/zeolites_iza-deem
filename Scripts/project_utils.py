@@ -19,7 +19,7 @@ def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
             structure_values.append(f[dataset_name][:])
     else:
         for structure_value in f.values():
-            structure_values.append(structure_value)
+            structure_values.append(structure_value[:])
 
     f.close()
 
