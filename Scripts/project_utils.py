@@ -27,24 +27,3 @@ def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
         structure_values = np.vstack(structure_values)
 
     return structure_values
-
-def build_representatives_from_hdf5(filename, representative_idxs, split_idxs):
-    """
-        Build a set of representative environments
-    """
-
-    representatives = []
-
-    f = h5py.File(filename, 'r')
-
-    for i in representative_idxs:
-        structure_number = np.nonzero((split_idxs-i) > 0)[0][0]
-        n = i - split_idxs
-        environment_number = n[structure_number-1]
-        representatives.append(f[f'{structure_number}'][environment_number, :])
-
-    f.close()
-
-    representatives = np.asarray(representatives)
-
-    return representatives
