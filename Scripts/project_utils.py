@@ -301,27 +301,33 @@ def split_and_save(train_data, test_data,
     else:
         np.savetxt(output, data, fmt=output_format)
 
-def do_covr(train_data, test_data,
+def do_pcovr(train_data, test_data,
             train_targets, test_targets,
-            covr_type='linear', **covr_parameters):
+            pcovr_type='linear', compute_xr=False, **covr_parameters):
 
-    if covr_type == 'linear':
-        covr_func = PCovR
-    elif covr_type == 'kernel':
-        covr_func = KPCovR
+    if pcovr_type == 'linear':
+        pcovr_func = PCovR
+    elif pcovr_type == 'kernel':
+        pcovr_func = KPCovR
     else:
         print("Error: invalid CovR type; use 'linear' or 'gaussian'")
 
-    covr = covr_func(**covr_parameters)
+    pcovr = pcovr_func(**pcovr_parameters)
 
-    covr.fit(train_data, train_targets)
+    pcovr.fit(train_data, train_targets)
 
-    T_train = covr.transform_K(train_data)
-    predicted_train_target = covr.transform_Y(train_data)
-    T_test = covr.transform_K(test_data)
-    predicted_test_target = covr.transform_Y(test_data)
+    T_train = pcovr.transform_K(train_data)
+    predicted_train_target = pcovr.transform_Y(train_data)
+    T_test = pcovr.transform_K(test_data)
+    predicted_test_target = pcovr.transform_Y(test_data)
 
-    predicted_train_target = np.squeeze(dfp_train) # TODO: move the squeezing to the KPCovR function
-    predicted_test_target = np.squeeze(dfp_test)
+    # TODO: move the squeezing to the KPCovR function
+    predicted_train_target = np.squeeze(predicted_train_target)
+    predicted_test_target = np.squeeze(predicted_test_target)
 
-    return T_train, T_test, predicted_train_target, predicted_test_target
+    if compute_xr and pcovr_type == 'linear':
+        xr_train = pcovr.transform_X(train_data)
+        xr_test = pcovr.transform_X(test_data)
+        return T_train, T_test, predicted_train_target, predicted_test_target, xr_train, xr_test
+    else:
+        return T_train, T_test, predicted_train_target, predicted_test_target
