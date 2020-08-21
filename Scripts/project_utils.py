@@ -5,6 +5,14 @@ import sys
 import numpy as np
 import h5py
 from sklearn.utils.multiclass import _ovr_decision_function
+from sklearn.svm import SVC, LinearSVC
+from sklearn.metrics import classification_report, confusion_matrix
+
+sys.path.append('/home/helfrech/Tools/Toolbox/utils')
+from kernels import build_kernel
+from kernels import center_kernel_fast, center_kernel_oos_fast
+from regression import LR, KRR
+from regression import PCovR, KPCovR
 
 def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
     """
@@ -90,7 +98,7 @@ def load_soaps(deem_file, iza_file,
     deem_train = [soaps_deem[i] for i in idxs_deem_train]
     deem_test = [soaps_deem[i] for i in idxs_deem_test]
     iza_train = [soaps_iza[i] for i in idxs_iza_train]
-    iza_test = [soap_iza[i] for i in idxs_iza_test]
+    iza_test = [soaps_iza[i] for i in idxs_iza_test]
 
     soaps_train = iza_train + deem_train
     soaps_test = iza_test + deem_test
@@ -107,10 +115,9 @@ def preprocess_soaps(soaps_train, soaps_test):
 
     return soaps_train, soaps_test
 
-# TODO: rename these functions
-def load_decision_functions(deem_file, iza_file,
-                            idxs_deem_train, idxs_deem_test,
-                            idxs_iza_train, idxs_iza_test):
+def load_data(deem_file, iza_file,
+              idxs_deem_train, idxs_deem_test,
+              idxs_iza_train, idxs_iza_test):
 
     deem_data = np.loadtxt(deem_file)
     iza_data = np.loadtxt(iza_file)
@@ -139,7 +146,7 @@ def load_kernels(kernel_file):
 
     return K_train, K_test, K_test_test
 
-def compute_kernels(soaps_train, soaps_test, kernel_file=None, **kwargs):
+def compute_kernels(soaps_train, soaps_test, kernel_file, **kwargs):
 
 
     # Build kernel between all DEEM and all IZA
@@ -147,27 +154,27 @@ def compute_kernels(soaps_train, soaps_test, kernel_file=None, **kwargs):
     K_test = build_kernel(soaps_test, soaps_train, **kwargs)
     K_test_test = build_kernel(soaps_test, soaps_test, **kwargs)
 
-    if kernel_file is not None:
+    # Save kernels for later
+    g = h5py.File(kernel_file, 'w')
 
-        # Save kernels for later
-        g = h5py.File(kernel_file, 'w')
+    g.create_dataset('K_train', data=K_train)
+    g.create_dataset('K_test', data=K_test)
+    g.create_dataset('K_test_test', data=K_test_test)
 
-        g.create_dataset('K_train', data=K_train)
-        g.create_dataset('K_test', data=K_test)
-        g.create_dataset('K_test_test', data=K_test_test)
+    for k, v in kwargs.items():
+        g.attrs[k] = v
 
-        for k, v in kernel_parameters.items():
-            g.attrs[k] = v
+    g.close()
 
-        g.close()
+def preprocess_kernels(K_train, K_test=[], K_test_test=[], K_bridge=None):
 
-    return K_train, K_test, K_test_test
+    if len(K_test_test) > 0 and K_bridge is None:
+        print("Error: must supply K_bridge to center OOS kernels")
+        return
 
-def preprocess_kernels(K_train, K_test=[], K_test_test=[]):
-
-    K_test_test = [center_kernel(k, K_ref=K_train) for k in K_test_test]
-    K_test = [center_kernel(k, K_ref=K_train) for k in K_test]
-    K_train = center_kernel(K_train)
+    K_test_test = [center_kernel_oos_fast(k, K_bridge=K_bridge, K_ref=K_train) for k in K_test_test]
+    K_test = [center_kernel_fast(k, K_ref=K_train) for k in K_test]
+    K_train = center_kernel_fast(K_train)
 
     K_scale = np.trace(K_train) / K_train.shape[0]
 
@@ -250,21 +257,21 @@ def regression_check(train_data, test_data,
     print(np.mean(np.abs(predicted_train_target - train_target), axis=0))
     print(np.mean(np.abs(predicted_test_target - test_target), axis=0))
 
-def preprocess_decision_functions(df_train, df_test):
-    df_center = np.mean(df_train, axis=0)
+def preprocess_data(train_data, test_data):
+    train_center = np.mean(train_data, axis=0)
 
-    df_train -= df_center
-    df_test -= df_center
+    train_data -= train_center
+    test_data -= train_center
 
-    if df_train.ndim == 1:
-        df_scale = np.linalg.norm(df_train) / np.sqrt(df_train.size)
+    if train_data.ndim == 1:
+        train_scale = np.linalg.norm(train_data) / np.sqrt(train_data.size)
     else:
-        df_scale = np.linalg.norm(df_train, axis=0) / np.sqrt(df_train.shape[0] / df_train.shape[1])
+        train_scale = np.linalg.norm(train_data, axis=0) / np.sqrt(train_data.shape[0] / train_data.shape[1])
 
-    df_train /= df_scale
-    df_test /= df_scale
+    train_data /= train_scale
+    test_data /= train_scale
 
-    return df_train, df_test, df_center, df_scale
+    return train_data, test_data, train_center, train_scale
 
 def postprocess_decision_functions(df_train, df_test, df_center, df_scale):
 
@@ -279,12 +286,15 @@ def postprocess_decision_functions(df_train, df_test, df_center, df_scale):
 def split_and_save(train_data, test_data,
                    train_idxs, test_idxs,
                    train_slice, test_slice,
-                   hdf5_attrs=None,
-                   output, output_format='%f'):
+                   output, output_format='%f',
+                   hdf5_attrs=None):
 
     # Save KPCovR class predictions
     n_samples = len(train_data) + len(test_data)
-    data = np.zeros((n_samples, train_data.shape[1]))
+    if train_data.ndim == 1:
+        data = np.zeros(n_samples)
+    else:
+        data = np.zeros((n_samples, train_data.shape[1]))
     data[train_idxs] = train_data[train_slice]
     data[test_idxs] = test_data[test_slice]
 
