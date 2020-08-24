@@ -37,7 +37,7 @@ def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
 
     return structure_values
 
-def df_to_class(df, df_type, n_classes, use_df_sums=True):
+def df_to_class(df, df_type, n_classes):
     """
         Make class predictions based on a decision function.
         Uses the sci-kit learn conversion from OVO to OVR
@@ -83,7 +83,8 @@ def df_to_class(df, df_type, n_classes, use_df_sums=True):
 def load_soaps(deem_file, iza_file,
                idxs_deem_train, idxs_deem_test,
                idxs_iza_train, idxs_iza_test,
-               idxs_deem_delete=[], idxs_iza_delete=[]):
+               idxs_deem_delete=[], idxs_iza_delete=[],
+               train_test_concatenate=False):
 
     # Load SOAPs
     soaps_deem = load_structures_from_hdf5(deem_file, datasets=None, concatenate=False)
@@ -103,15 +104,21 @@ def load_soaps(deem_file, iza_file,
     soaps_train = iza_train + deem_train
     soaps_test = iza_test + deem_test
 
+    if train_test_concatenate:
+        soaps_train = np.vstack(soaps_train)
+        soaps_test = np.vstack(soaps_test)
+
     return soaps_train, soaps_test
 
 def preprocess_soaps(soaps_train, soaps_test):
 
     # Can also do other scaling/centering here --
-    # this is mostly just to get the SOAPs to a 'usable' magnitude
+    # this is mostly just to get the SOAPs to a 'usable' magnitude.
+    # The std. dev. on the whole matrix of SOAPs has no real meaning
+    # since it is computed on the flattened array
     soaps_scale = np.std(soaps_train)
-    soaps_train_scaled = soaps_train / soaps_scale
-    soaps_test_scaled = soaps_test / soaps_scale
+    soaps_train = soaps_train / soaps_scale
+    soaps_test = soaps_test / soaps_scale
 
     return soaps_train, soaps_test
 
@@ -273,15 +280,18 @@ def preprocess_data(train_data, test_data):
 
     return train_data, test_data, train_center, train_scale
 
-def postprocess_decision_functions(df_train, df_test, df_center, df_scale):
+def postprocess_decision_functions(df_train, df_test, df_center, df_scale, 
+        df_type, n_classes):
 
     # Rescale to raw decision function
-    dfp_train = dfp_train * df_scale + df_center
-    dfp_test = dfp_test * df_scale + df_center
+    df_train = df_train * df_scale + df_center
+    df_test = df_test * df_scale + df_center
 
     # Predict classes based on KPCovRized decision functions
-    predicted_cantons_train = df_to_class(dfp_train, df_type, n_classes)
-    predicted_cantons_test = df_to_class(dfp_test, df_type, n_classes)
+    predicted_cantons_train = df_to_class(df_train, df_type, n_classes)
+    predicted_cantons_test = df_to_class(df_test, df_type, n_classes)
+
+    return predicted_cantons_train, predicted_cantons_test
 
 def split_and_save(train_data, test_data,
                    train_idxs, test_idxs,
@@ -305,7 +315,10 @@ def split_and_save(train_data, test_data,
             g.create_dataset(str(ddx).zfill(n_digits), data=d)
 
         for k, v in hdf5_attrs.items():
-            g.attrs[k] = v
+            if v is None:
+                g.attrs[k] = 'None'
+            else:
+                g.attrs[k] = v
 
         g.close()
     else:
@@ -313,7 +326,7 @@ def split_and_save(train_data, test_data,
 
 def do_pcovr(train_data, test_data,
             train_targets, test_targets,
-            pcovr_type='linear', compute_xr=False, **covr_parameters):
+            pcovr_type='linear', compute_xr=False, **pcovr_parameters):
 
     if pcovr_type == 'linear':
         pcovr_func = PCovR
@@ -326,18 +339,18 @@ def do_pcovr(train_data, test_data,
 
     pcovr.fit(train_data, train_targets)
 
-    T_train = pcovr.transform_K(train_data)
-    predicted_train_target = pcovr.transform_Y(train_data)
-    T_test = pcovr.transform_K(test_data)
-    predicted_test_target = pcovr.transform_Y(test_data)
+    T_train = pcovr.transform(train_data)
+    predicted_train_target = pcovr.predict(train_data)
+    T_test = pcovr.transform(test_data)
+    predicted_test_target = pcovr.predict(test_data)
 
-    # TODO: move the squeezing to the KPCovR function
+    # TODO: move the squeezing to the KPCovR function?
     predicted_train_target = np.squeeze(predicted_train_target)
     predicted_test_target = np.squeeze(predicted_test_target)
 
     if compute_xr and pcovr_type == 'linear':
-        xr_train = pcovr.transform_X(train_data)
-        xr_test = pcovr.transform_X(test_data)
+        xr_train = pcovr.inverse_transform(train_data)
+        xr_test = pcovr.inverse_transform(test_data)
         return T_train, T_test, predicted_train_target, predicted_test_target, xr_train, xr_test
     else:
         return T_train, T_test, predicted_train_target, predicted_test_target
