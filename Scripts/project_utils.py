@@ -13,6 +13,7 @@ from kernels import build_kernel
 from kernels import center_kernel_fast, center_kernel_oos_fast
 from regression import LR, KRR
 from regression import PCovR, KPCovR
+from tools import save_json
 
 def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
     """
@@ -220,16 +221,10 @@ def do_svc(train_data, test_data, train_classes, test_classes,
             predicted_test_classes = svc.predict(test_data)
             output_list.extend((predicted_train_classes, predicted_test_classes))
 
-            print(classification_report(test_classes, predicted_test_classes))
-            print(confusion_matrix(test_classes, predicted_test_classes))
-
         elif out == 'scores':
             train_score = svc.score(train_data, train_classes)
             test_score = svc.score(test_data, test_classes)
             output_list.extend((train_scores, test_scores))
-
-            print(train_score)
-            print(test_score)
 
     return output_list
 
@@ -258,11 +253,10 @@ def regression_check(train_data, test_data,
 
     regressor = regression_func(regularization=1.0E-12)
     regressor.fit(train_data, train_target)
-    predicted_train_target = regressor.transform(train_data)
-    predicted_test_target = regressor.transform(test_data)
-
-    print(np.mean(np.abs(predicted_train_target - train_target), axis=0))
-    print(np.mean(np.abs(predicted_test_target - test_target), axis=0))
+    predicted_train_target = regressor.predict(train_data)
+    predicted_test_target = regressor.predict(test_data)
+    
+    return predicted_train_target, predicted_test_target
 
 def preprocess_data(train_data, test_data):
     train_center = np.mean(train_data, axis=0)
@@ -354,3 +348,60 @@ def do_pcovr(train_data, test_data,
         return T_train, T_test, predicted_train_target, predicted_test_target, xr_train, xr_test
     else:
         return T_train, T_test, predicted_train_target, predicted_test_target
+
+def generate_reports(cantons_train, cantons_test,
+        predicted_cantons_train, predicted_cantons_test,
+        class_names=None):
+
+    train_report = classification_report(cantons_train, predicted_cantons_train, 
+            output_dict=True, target_names=class_names, zero_division=0) 
+    test_report = classification_report(cantons_test, predicted_cantons_test,
+            output_dict=True, target_names=class_names, zero_division=0)
+                            
+    train_matrix = confusion_matrix(cantons_train, predicted_cantons_train)
+    test_matrix = confusion_matrix(cantons_test, predicted_cantons_test)
+
+    return train_report, test_report, train_matrix, test_matrix
+                                                    
+def save_reports(train_report, test_report, train_matrix, test_matrix, 
+        train_report_file, test_report_file,
+        train_matrix_file, test_matrix_file):
+
+    save_json(train_report, train_report_file)
+    save_json(test_report, test_report_file)
+                                                                                        
+    np.savetxt(train_matrix_file, train_matrix)
+    np.savetxt(test_matrix_file, test_matrix)
+
+def print_report(report, n_digits=2):
+
+    headers = ['precision', 'recall', 'f1-score', 'support']
+    
+    max_header_width = np.amax([len(header) for header in headers])
+    max_data_width = n_digits + 2
+    max_width = np.maximum(max_header_width, max_data_width)
+    max_label_width = np.amax([len(label) for label in report.keys()])
+    
+    header_format = f'{{:>{max_label_width}s}} '
+    header_format += f' {{:>{max_width}s}}' * len(headers)
+
+    data_format = f'{{:>{max_label_width}s}} '
+    data_format += f' {{:>{max_width}.{n_digits}f}}' * (len(headers) - 1)
+    data_format += f' {{:>{max_width}d}}'
+
+    report_string = header_format.format('', *headers)
+    hline = '-' * len(report_string) + '\n'
+    report_string = hline + report_string
+
+    accuracy = report.pop('accuracy')
+    for row_label, data in report.items():
+        report_string += '\n' + data_format.format(row_label, data['precision'],
+                data['recall'], data['f1-score'], data['support'])
+
+    report_string += '\n' + hline
+    report_string += f'\n{{:>{max_label_width}s}} '.format('accuracy')
+    report_string += f' {{:>{max_width}.{n_digits}f}}'.format(accuracy)
+    report_string += '\n' + hline
+
+    print(report_string)
+    
