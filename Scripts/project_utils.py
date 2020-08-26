@@ -190,7 +190,7 @@ def preprocess_kernels(K_train, K_test=[], K_test_test=[], K_bridge=None):
     K_test = [k / K_scale for k in K_test]
     K_train /= K_scale
 
-    return K_train, K_test, K_test_test
+    return (K_train, *K_test, *K_test_test)
 
 def do_svc(train_data, test_data, train_classes, test_classes,
            svc_type='linear', outputs=['decision_functions', 'predictions', 'scores'], **kwargs):
@@ -224,7 +224,7 @@ def do_svc(train_data, test_data, train_classes, test_classes,
         elif out == 'scores':
             train_score = svc.score(train_data, train_classes)
             test_score = svc.score(test_data, test_classes)
-            output_list.extend((train_scores, test_scores))
+            output_list.extend((train_score, test_score))
 
     return output_list
 
