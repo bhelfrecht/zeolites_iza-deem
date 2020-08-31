@@ -15,6 +15,34 @@ from regression import LR, KRR
 from regression import PCovR, KPCovR
 from tools import save_json
 
+# TODO: move to utils/tools.py
+def save_hdf5(filename, data):
+    """
+        Save an array or list of arrays to an HDF5 file
+
+        ---Arguments---
+        filename: name of the file in which to save the data
+        data: data to save. If a list of arrays, saves each
+            array as a separate dataset in a top-level group.
+            Otherwise just saves the array as a dataset
+    """
+
+    f = h5py.File(filename, 'w')
+
+    if isinstance(data, list):
+        n_digits = len(str(len(data) - 1))
+        for ddx, d in enumerate(data):
+
+            # Don't need `track_order=True` because
+            # we create datasets with names in alphanumeric order
+            f.create_dataset(str(ddx).zfill(n_digits), data=d)
+    else:
+        f.create_dataset('0', data=data)
+
+    f.close()
+
+# TODO: rename this or make a more general HDF5 loading function
+# TODO: move to utils/tools.py
 def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
     """
         Load structure-based data from an HDF5 file
