@@ -173,7 +173,7 @@ def load_soaps(deem_file, iza_file,
 
     return soaps_train, soaps_test
 
-def preprocess_soaps(soaps_train, soaps_test):
+def preprocess_soaps(soaps_train, soaps_test, return_scale=False):
     """
         Scale SOAP vectors globally by the standard deviation
         of all of the SOAP elements; useful for getting
@@ -183,10 +183,13 @@ def preprocess_soaps(soaps_train, soaps_test):
         ---Arguments---
         soaps_train: SOAP vectors in the train set
         soaps_test: SOAP vectors in the test set
+        return_scale: if True, return the scale factor
+            used to scale the train and test SOAP vectors
 
         ---Returns---
         soaps_train: scaled SOAP vectors in the train set
         soaps_test: scaled SOAP vectors in the test set
+        soaps_scale: scale factor
     """
 
     # Can also do other scaling/centering here --
@@ -197,7 +200,10 @@ def preprocess_soaps(soaps_train, soaps_test):
     soaps_train = soaps_train / soaps_scale
     soaps_test = soaps_test / soaps_scale
 
-    return soaps_train, soaps_test
+    if return_scale:
+        return soaps_train, soaps_test, soaps_scale
+    else:
+        return soaps_train, soaps_test
 
 def load_data(deem_file, iza_file,
         idxs_deem_train, idxs_deem_test,
@@ -349,7 +355,7 @@ def preprocess_kernels(K_train, K_test=None, K_test_test=None, K_bridge=None):
 
 def do_svc(train_data, test_data, train_classes, test_classes,
         svc_type='linear', 
-        outputs=['decision_functions', 'predictions', 'weights'], **kwargs):
+        outputs=['decision_functions', 'predictions', 'weights', 'model'], **kwargs):
     """
         Wrapper function for performing KSVC/LSVC and computing
         decision functions, class predictions, and primal weights
@@ -363,6 +369,8 @@ def do_svc(train_data, test_data, train_classes, test_classes,
             or a linear SVC ('linear')
         outputs: which quantities to compute: 'decision_functions',
             'predictions', or 'weights', provided as a list.
+            If 'model' is added to the output list,
+            the SVC object is also returned.
             The desired quantities will be returned in the same
             order in which they are provided
         **kwargs: keyword arguments for the scikit-lear SVC
@@ -426,6 +434,9 @@ def do_svc(train_data, test_data, train_classes, test_classes,
 
         elif out == 'weights':
             output_list.append(svc.coef_)
+
+        elif out == 'model':
+            output_list.append(svc)
 
     return output_list
 
@@ -564,7 +575,8 @@ def split_and_save(train_data, test_data, train_idxs, test_idxs,
         """
 
     # Save KPCovR class predictions
-    n_samples = len(train_data) + len(test_data)
+    #n_samples = len(train_data) + len(test_data)
+    n_samples = len(train_idxs) + len(test_idxs)
     if train_data.ndim == 1:
         data = np.zeros(n_samples)
     else:
