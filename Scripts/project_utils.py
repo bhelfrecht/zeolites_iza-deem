@@ -16,7 +16,7 @@ from regression import PCovR, KPCovR
 from tools import save_json
 
 # TODO: move to utils/tools.py
-def save_hdf5(filename, data):
+def save_hdf5(filename, data, attrs={}):
     """
         Save an array or list of arrays to an HDF5 file
 
@@ -25,6 +25,7 @@ def save_hdf5(filename, data):
         data: data to save. If a list of arrays, saves each
             array as a separate dataset in a top-level group.
             Otherwise just saves the array as a dataset
+        attrs: dictionary of attributes to add to the HDF5 file
     """
 
     f = h5py.File(filename, 'w')
@@ -38,6 +39,13 @@ def save_hdf5(filename, data):
             f.create_dataset(str(ddx).zfill(n_digits), data=d)
     else:
         f.create_dataset('0', data=data)
+
+    # Add attributes
+    for k, v in attrs.items():
+        if v is None:
+            f.attrs[k] = 'None'
+        else:
+            f.attrs[k] = v
 
     f.close()
 
@@ -501,6 +509,7 @@ def preprocess_data(train_data, test_data):
         train_scale: scale factor
     """
 
+    # TODO: be careful here since data is modified in place
     train_center = np.mean(train_data, axis=0)
 
     train_data -= train_center
@@ -601,7 +610,7 @@ def split_and_save(train_data, test_data, train_idxs, test_idxs,
         np.savetxt(output, data, fmt=output_format)
 
 def do_pcovr(train_data, test_data, train_targets, test_targets,
-        pcovr_type='linear', compute_xr=False, **pcovr_parameters):
+        pcovr_type='linear', compute_xr=False, return_model=False, **pcovr_parameters):
     """
         Wrapper function for PCovR and KPCovR
 
@@ -614,6 +623,7 @@ def do_pcovr(train_data, test_data, train_targets, test_targets,
             or KPCovR ('KPCovR')
         compute_xr: whether to compute a reconstruction
             of the train_data (PCovR only)
+        return_model: whether to return the PCovR model
         **pcovr_parameters: keyword arguments for the
             PCovR/KPCovR functions
 
@@ -626,6 +636,7 @@ def do_pcovr(train_data, test_data, train_targets, test_targets,
             if compute_xr is True
         (xr_test): Reconstruction of the test predictor variable
             if compute_xr is True
+        (pcovr): Fitted (K)PCovR model
     """
 
     if pcovr_type == 'linear':
@@ -648,12 +659,17 @@ def do_pcovr(train_data, test_data, train_targets, test_targets,
     predicted_train_target = np.squeeze(predicted_train_target)
     predicted_test_target = np.squeeze(predicted_test_target)
 
+    outputs = [T_train, T_test, predicted_train_target, predicted_test_target]
+
     if compute_xr and pcovr_type == 'linear':
         xr_train = pcovr.inverse_transform(train_data)
         xr_test = pcovr.inverse_transform(test_data)
-        return T_train, T_test, predicted_train_target, predicted_test_target, xr_train, xr_test
-    else:
-        return T_train, T_test, predicted_train_target, predicted_test_target
+        outputs.extend([xr_train, xr_test])
+
+    if return_model:
+        outputs.append(pcovr)
+    
+    return outputs
 
 def generate_reports(cantons_train, cantons_test,
         predicted_cantons_train, predicted_cantons_test,
