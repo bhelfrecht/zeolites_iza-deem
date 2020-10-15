@@ -363,7 +363,8 @@ def preprocess_kernels(K_train, K_test=None, K_test_test=None, K_bridge=None):
 
 def do_svc(train_data, test_data, train_classes, test_classes,
         svc_type='linear', 
-        outputs=['decision_functions', 'predictions', 'weights', 'model'], **kwargs):
+        outputs=['decision_functions', 'predictions', 'weights'], 
+        save_model=None, **kwargs):
     """
         Wrapper function for performing KSVC/LSVC and computing
         decision functions, class predictions, and primal weights
@@ -377,10 +378,9 @@ def do_svc(train_data, test_data, train_classes, test_classes,
             or a linear SVC ('linear')
         outputs: which quantities to compute: 'decision_functions',
             'predictions', or 'weights', provided as a list.
-            If 'model' is added to the output list,
-            the SVC object is also returned.
             The desired quantities will be returned in the same
             order in which they are provided
+        save_model: save the SVC model in JSON at the given location
         **kwargs: keyword arguments for the scikit-lear SVC
 
         ---Returns---
@@ -443,8 +443,8 @@ def do_svc(train_data, test_data, train_classes, test_classes,
         elif out == 'weights':
             output_list.append(svc.coef_)
 
-        elif out == 'model':
-            output_list.append(svc)
+    if save_model is not None:
+        save_json(svc.__dict__, save_model, array_convert=True)
 
     return output_list
 
@@ -610,7 +610,7 @@ def split_and_save(train_data, test_data, train_idxs, test_idxs,
         np.savetxt(output, data, fmt=output_format)
 
 def do_pcovr(train_data, test_data, train_targets, test_targets,
-        pcovr_type='linear', compute_xr=False, return_model=False, **pcovr_parameters):
+        pcovr_type='linear', compute_xr=False, save_model=None, **pcovr_parameters):
     """
         Wrapper function for PCovR and KPCovR
 
@@ -623,7 +623,7 @@ def do_pcovr(train_data, test_data, train_targets, test_targets,
             or KPCovR ('KPCovR')
         compute_xr: whether to compute a reconstruction
             of the train_data (PCovR only)
-        return_model: whether to return the PCovR model
+        save_model: save the PCovR model in JSON at the specified location
         **pcovr_parameters: keyword arguments for the
             PCovR/KPCovR functions
 
@@ -636,7 +636,6 @@ def do_pcovr(train_data, test_data, train_targets, test_targets,
             if compute_xr is True
         (xr_test): Reconstruction of the test predictor variable
             if compute_xr is True
-        (pcovr): Fitted (K)PCovR model
     """
 
     if pcovr_type == 'linear':
@@ -666,8 +665,8 @@ def do_pcovr(train_data, test_data, train_targets, test_targets,
         xr_test = pcovr.inverse_transform(test_data)
         outputs.extend([xr_train, xr_test])
 
-    if return_model:
-        outputs.append(pcovr)
+    if save_model is not None:
+        save_json(pcovr.__dict__, save_model, array_convert=True)
     
     return outputs
 
