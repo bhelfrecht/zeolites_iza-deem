@@ -49,8 +49,8 @@ PROGRAM GEN
 
   iStruc= 0
   DO 
-     READ(100,*,END=10) xyzfilename
-     READ(101,*,END=10) ciffilename
+     READ(100,'(A)',END=10) xyzfilename
+     READ(101,'(A)',END=10) ciffilename
      ciffilename= ADJUSTL( TRIM( ciffilename ) )
      fwname= ciffilename( 1 : 7 ) 
      inpname= TRIM( fwname ) // TRIM( '.inp' )
