@@ -8,13 +8,16 @@ import sys
 from ase import Atoms 
 from ase.io import read, write
 from tqdm import tqdm
+import glob
 
 ################################################################################
 input_dir = sys.argv[1]
 output_dir = sys.argv[2]
 
-for filename in tqdm(os.listdir(input_dir)):
-    if filename.endswith('.cif'):
-        config = read(filename, format='cif')
-        write(f'{output_dir}/{filename}.xyz', config)
+cifs = glob.glob(f'{input_dir}/*.cif')
+
+for filename in tqdm(cifs):
+    config = read(filename, format='cif')
+    output_filename = os.path.basename(filename)
+    write(f'{output_dir}/{output_filename}.xyz', config)
 ################################################################################
