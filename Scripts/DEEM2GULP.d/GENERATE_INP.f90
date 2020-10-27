@@ -198,7 +198,7 @@ PROGRAM GEN
      WRITE(200,'(A)') 'Si core Si' 
      WRITE(200,'(A)') 'O core O_O2-' 
      WRITE(200,'(A)') 'O shel O_O2-'
-     WRITE(200,'(A)') 'library catlow_mod.lib'
+     WRITE(200,'(A)') 'library ../catlow_mod.lib'
      WRITE(Strucname,'(A,A)') 'OPT_', fwname
      WRITE(200,'(2A)') 'output xyz ' , Strucname
      WRITE(200,'(2A)') 'output cif ' , Strucname
