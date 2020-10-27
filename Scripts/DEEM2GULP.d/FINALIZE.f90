@@ -2,21 +2,25 @@
 PROGRAM FINALIZE
   IMPLICIT NONE
   CHARACTER(LEN=3) :: NAME
-  CHARACTER(LEN=20) :: ciffilename, xyzfilename
+  CHARACTER(LEN=50) :: ciffilename, xyzfilename
   CHARACTER(LEN=30) :: AW, W
   CHARACTER(LEN=200) :: NEWCOMMENTLINE
   CHARACTER(LEN=500) :: COMMAND
   INTEGER :: iStruc
   REAL(KIND= 8) :: a, b, c, alpha, beta, gamma, Omega
   REAL(KIND= 8), DIMENSION(1:3) :: aVec, bVec, cVec
+  CHARACTER(LEN=15) :: fwname
 
   OPEN( UNIT= 100, FILE= 'Names_OPT_xyz.txt', ACTION= 'READ' )
   OPEN( UNIT= 101, FILE= 'Names_OPT_cif.txt', ACTION= 'READ' )
 
   iStruc= 0
   DO
-     READ(100,*,END=10) xyzfilename
-     READ(101,*,END=10) ciffilename
+     READ(100,'(A)',END=10) xyzfilename
+     READ(101,'(A)',END=10) ciffilename
+     ciffilename= ADJUSTL( TRIM( ciffilename ) )
+     xyzfilename= ADJUSTL( TRIM( xyzfilename ) )
+     fwname= ciffilename( 9 : 23 )
      iStruc= iStruc + 1
 
      OPEN( UNIT= 102, FILE= ciffilename, ACTION= 'READ' )
@@ -87,7 +91,7 @@ PROGRAM FINALIZE
      ! -------------------------
 
      WRITE(NEWCOMMENTLINE,'(A,9F12.6,2A)') 'Lattice=" ', aVec(:), bVec(:), cVec(:) &
-          & , ' " Properties=species:S:1:pos:R:3 Filename= ', ciffilename
+          & , ' " Properties=species:S:1:pos:R:3 Filename=', fwname 
      NEWCOMMENTLINE= ADJUSTL( TRIM( NEWCOMMENTLINE ) ) 
      WRITE(*,*) 'Comment here: ------'
      WRITE(*,'(A)') NEWCOMMENTLINE
