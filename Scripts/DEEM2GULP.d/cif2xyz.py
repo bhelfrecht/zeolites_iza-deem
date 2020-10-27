@@ -4,13 +4,17 @@
 # by Rocio Semino
 
 import os
-import sh
+import sys
 from ase import Atoms 
 from ase.io import read, write
+from tqdm import tqdm
 
 ################################################################################
-for filename in os.listdir('.'):
-	if filename.endswith(".cif"):
-		config = Atoms(read(filename,format='cif'))
-		write(filename+".xyz", config)
+input_dir = sys.argv[1]
+output_dir = sys.argv[2]
+
+for filename in tqdm(os.listdir(input_dir)):
+    if filename.endswith('.cif'):
+        config = read(filename, format='cif')
+        write(f'{output_dir}/{filename}.xyz', config)
 ################################################################################
