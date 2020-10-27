@@ -58,13 +58,13 @@ do
     fwname=${file::-4}
 
     ## Change path to gulp here
-    /home/giovanni/Documenti/Installations.d/gulp-5.1/Src/gulp < $file > log_GULP_$fwname.out
+    gulp < $file > log_GULP_$fwname.out
 
     if grep -Fq "Conditions for a minimum have not been satisfied" log_GULP_$fwname.out
     then
 	echo 'Optimal structure not achieved ------ Attempting constant V optimisation'
 	sed -i "s/opti conp/opti conv/" $file
-        /home/giovanni/Documenti/Installations.d/gulp-5.1/Src/gulp < $file > log_GULP_$fwname.out
+        gulp < $file > log_GULP_$fwname.out
 	if grep -Fq "Conditions for a minimum have not been satisfied" log_GULP_$fwname.out
 	then
 	    echo "Optimal structure not achieved ------ I will keep the result anyway"
