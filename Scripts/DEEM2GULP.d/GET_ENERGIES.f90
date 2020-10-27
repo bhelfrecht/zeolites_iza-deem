@@ -3,17 +3,13 @@ PROGRAM GE
   IMPLICIT NONE
   CHARACTER(LEN=2) :: Lab
   CHARACTER(LEN= 100) :: COMMAND
-  CHARACTER(LEN= 20) :: FILENAME
+  CHARACTER(LEN= 50) :: FILENAME
   CHARACTER(LEN= 50) :: AW
   CHARACTER(LEN= 42) :: WW
   CHARACTER(LEN= 20), DIMENSION(:) :: List2(2), List3(3), List4(4), List5(5), List6(6), List7(7)
   INTEGER :: Count, ifile, iRead, SiCount, idum, iline, num
   REAL(KIND= 8) :: IntPot, TPot, MMReal, MMRecip, MMTotal, TotEn
   LOGICAL :: LCheck
-
-  COMMAND= 'ls log_GULP_*.out > Files.txt'
-
-  CALL SYSTEM( COMMAND )
 
   OPEN( UNIT= 100, FILE= 'Files.txt', ACTION= 'READ' )
   OPEN( UNIT= 101, FILE= 'Energies.out', ACTION= 'WRITE' )
@@ -24,7 +20,8 @@ PROGRAM GE
   ifile= 0
   iline= 0
   DO 
-     READ(100,*,END=10) FILENAME
+     READ(100,'(A)',END=10) FILENAME
+     FILENAME= ADJUSTL( TRIM( FILENAME ) )
      ifile= ifile + 1
      OPEN( UNIT= 200, FILE= FILENAME, ACTION= 'READ' )
      Count= 0
@@ -77,7 +74,7 @@ PROGRAM GE
               !Print results
               iline= iline + 1
 
-              WRITE(101,*) ifile, FILENAME(10:16), SiCount &
+              WRITE(101,*) ifile, FILENAME(18:24), SiCount &
                    & , IntPot, TPot, MMReal, MMRecip, MMTotal &
                    & , TotEn
 
