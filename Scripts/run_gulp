@@ -1,0 +1,7 @@
+#!/bin/bash
+
+for i in '800-804' '805-809' '810-814' '815-819' '820-824' '825-829' '830-833'; do
+    echo Running GULP for "$i"...
+    python gulp.py ../Raw_Data/DEEM_330k/CIF/"$i"
+    sleep 1
+done
