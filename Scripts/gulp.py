@@ -5,6 +5,16 @@ import sys
 import glob
 import shlex
 import subprocess
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('input', type=str,
+        help='Directory containing the input files')
+parser.add_argument('output', type=str,
+        help='Directory to store the GULP outputs')
+parser.add_argument('-l', '--library', type=str, default='.',
+        help='Path to the library file')
+args = parser.parse_args()
 
 def run_gulp(gulp_input, gulp_output):
     """
@@ -30,7 +40,7 @@ def run_gulp(gulp_input, gulp_output):
 
     return gulp.stderr
 
-def cif2gulp(input_name, output_name):
+def cif2gulp(input_name, output_name, library_file):
     """
         Read CIF files and turn them into GULP input files
 
@@ -172,7 +182,7 @@ def cif2gulp(input_name, output_name):
     g = open(output_name, 'w')
     
     # Optimization options
-    g.write('conp shell\n')
+    g.write('opti conp shell\n')
     
     # Title info
     g.write('title\n')
@@ -238,7 +248,7 @@ def cif2gulp(input_name, output_name):
     g.write('O shel O_O2-\n')
     
     # Potential file
-    g.write('library DEEM2GULP.d/catlow_mod.lib\n')
+    g.write(f'library {library_file}\n')
     
     # Output files
     g.write(f'output xyz {output_name[:-3]}_OPT\n')
@@ -246,11 +256,11 @@ def cif2gulp(input_name, output_name):
     g.close()
 
 # Prepare for GULP run
-output_dir = '../Raw_Data/GULP/DEEM_330k'
-
 # We take the input dir as a command line option so we can
 # run different chunks of the dataset in parallel
-input_dir = sys.argv[1]
+input_dir = args.input
+output_dir = args.output
+library_file = args.library
 cif_files = glob.glob(f'{input_dir}/*.cif')
 
 for cif_file in cif_files:
@@ -264,15 +274,11 @@ for cif_file in cif_files:
     gulp_output = f'{gulp_dir}/{basename}.out'
 
     # Make GULP input files
-    cif2gulp(cif_file, gulp_input)
+    cif2gulp(cif_file, gulp_input, library_file)
 
     # Run GULP
-    # TODO: if we want to run in parallel with different
-    # bash instances, we should change directory
-    # before running GULP, but then we have to change
-    # the library path in the GULP input
     gulp_stderr = run_gulp(gulp_input, gulp_output)
 
     if len(gulp_stderr) > 0:
         print(f'GULP calculation for structure {basename} encountered an error:')
-        print(f'    {gulp_stderr}')
+        print(f'    {gulp_stderr.decode()}')
