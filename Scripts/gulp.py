@@ -264,7 +264,7 @@ if __name__ == '__main__':
     cif_dir = args.cif
     gulp_dir = args.gulp
     library_file = args.library
-    cif_files = glob.glob(f'{cif_dir}/*.cif')
+    cif_files = glob.iglob(f'{cif_dir}/*.cif')
 
     if not os.path.exists(gulp_dir):
         os.makedirs(gulp_dir)
