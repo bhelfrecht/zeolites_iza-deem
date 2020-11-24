@@ -7,50 +7,40 @@ import shlex
 import subprocess
 import argparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument('input', type=str,
-        help='Directory containing the input files')
-parser.add_argument('output', type=str,
-        help='Directory to store the GULP outputs')
-parser.add_argument('-l', '--library', type=str, default='.',
-        help='Path to the library file')
-args = parser.parse_args()
-
-def run_gulp(gulp_input, gulp_output):
+def run_gulp(gulp_input, gulp_output, gulp_log):
     """
         Wrapper for running GULP calculations
 
         ---Arguments---
         gulp_input: GULP input file
         gulp_output: GULP output file
-
-        ---Returns---
-        gulp.stderr: standard error output from GULP
+        gulp_log: GULP log file (for stderr)
     """
 
     gulp_in = open(gulp_input, 'r')
     gulp_out = open(gulp_output, 'w')
+    gulp_log = open(gulp_log, 'w')
 
     # Run GULP
     gulp = subprocess.run('gulp', stdin=gulp_in, stdout=gulp_out, 
-            stderr=subprocess.PIPE)
+            stderr=gulp_log)
 
     gulp_in.close()
     gulp_out.close()
+    gulp_log.close()
 
-    return gulp.stderr
-
-def cif2gulp(input_name, output_name, library_file):
+def cif2gulp(cif_name, gulp_name, library_file):
     """
         Read CIF files and turn them into GULP input files
 
         ---Arguments---
         input_name: name of CIF file
         output_name: name of GULP input file
+        library_file: name of the library file
     """
     # TODO: make more compatible with COD structures
 
-    basename = os.path.basename(input_name)
+    basename = os.path.basename(cif_name)
     
     # Initialize the containers for storing the CIF data
     cif_data = {}
@@ -138,7 +128,7 @@ def cif2gulp(input_name, output_name, library_file):
             ]
     
     # Read the CIF file line-by-line
-    with open(input_name, 'r') as f:
+    with open(cif_name, 'r') as f:
         for line in f:
     
             # Skip comment lines
@@ -179,10 +169,10 @@ def cif2gulp(input_name, output_name, library_file):
                         atoms_data[key].append(data)
     
     # Prepare the GULP input file
-    g = open(output_name, 'w')
+    g = open(gulp_name, 'w')
     
     # Optimization options
-    g.write('opti conp shell\n')
+    g.write('opti conv shell\n')
     
     # Title info
     g.write('title\n')
@@ -251,34 +241,52 @@ def cif2gulp(input_name, output_name, library_file):
     g.write(f'library {library_file}\n')
     
     # Output files
-    g.write(f'output xyz {output_name[:-3]}_OPT\n')
-    g.write(f'output cif {output_name[:-3]}_OPT')
+    g.write(f'output xyz {gulp_name[:-3]}_opt\n')
+    g.write(f'output cif {gulp_name[:-3]}_opt')
     g.close()
 
-# Prepare for GULP run
-# We take the input dir as a command line option so we can
-# run different chunks of the dataset in parallel
-input_dir = args.input
-output_dir = args.output
-library_file = args.library
-cif_files = glob.glob(f'{input_dir}/*.cif')
+if __name__ == '__main__':
 
-for cif_file in cif_files:
+    # Parse command line arguments if called as script
+    parser = argparse.ArgumentParser()
+    parser.add_argument('cif', type=str,
+            help='Directory containing the CIF files')
+    parser.add_argument('gulp', type=str,
+            help='Directory to store the GULP calculations')
+    parser.add_argument('-l', '--library', type=str, default='.',
+            help='Path to the library file')
+    args = parser.parse_args()
 
-    # Set up directories for GULP inputs and outputs
-    basename = os.path.splitext(os.path.basename(cif_file))[0]
-    gulp_dir = f'{output_dir}/{basename}'
+    # Prepare for GULP run
+    # We take the input dir as a command line option so we can
+    # run different chunks of the dataset in parallel
+    run_dir = os.getcwd()
+    cif_dir = args.cif
+    gulp_dir = args.gulp
+    library_file = args.library
+    cif_files = glob.glob(f'{cif_dir}/*.cif')
+
     if not os.path.exists(gulp_dir):
         os.makedirs(gulp_dir)
-    gulp_input = f'{gulp_dir}/{basename}.in'
-    gulp_output = f'{gulp_dir}/{basename}.out'
+    
+    for cif_file in cif_files:
+    
+        # Set up directories for GULP inputs and outputs
+        basename = os.path.splitext(os.path.basename(cif_file))[0]
+        gulp_run_dir = f'{gulp_dir}/{basename}'
 
-    # Make GULP input files
-    cif2gulp(cif_file, gulp_input, library_file)
+        if not os.path.exists(gulp_run_dir):
+            os.makedirs(gulp_run_dir)
 
-    # Run GULP
-    gulp_stderr = run_gulp(gulp_input, gulp_output)
+        os.chdir(gulp_run_dir)
+        gulp_input = f'{basename}.in'
+        gulp_output = f'{basename}.out'
+        gulp_log = f'{basename}.log'
 
-    if len(gulp_stderr) > 0:
-        print(f'GULP calculation for structure {basename} encountered an error:')
-        print(f'    {gulp_stderr.decode()}')
+        # Make GULP input files
+        cif2gulp(os.path.relpath(cif_file, start=gulp_run_dir), gulp_input,
+                os.path.relpath(library_file, start=gulp_run_dir))
+    
+        # Run GULP
+        run_gulp(gulp_input, gulp_output, gulp_log) 
+        os.chdir(run_dir)
