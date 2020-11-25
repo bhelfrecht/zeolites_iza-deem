@@ -4,12 +4,11 @@ import os
 import sys
 import subprocess
 import glob
-from tqdm import tqdm
 from gulp import run_gulp
 
-# TODO: make log file for fixing and write debug info
 gulp_dir = '../Raw_Data/GULP/DEEM_330k'
 summary_file = f'{gulp_dir}/optimization_summary.dat'
+logfile = f'{gulp_dir}/fix_gulp.log'
 run_dir = os.getcwd()
 
 def backup_run(files, backup_dir):
@@ -27,8 +26,9 @@ def replace_input_line(old_file, new_file, old_line, new_line):
                 g.write(line)
     g.close()
 
+log = open(logfile, 'w')
 with open(summary_file, 'r') as f:
-    for line in tqdm(f):
+    for line in f:
 
         if line.startswith('#'):
             continue
@@ -39,10 +39,17 @@ with open(summary_file, 'r') as f:
         failed = int(line_data[-1])
 
         if failed or failed_minimum:
+            if failed:
+                log.write(f'GULP for structure {structure_id} failed. '
+                        'Attempting calculation without symmetry\n')
+            elif failed_minimum:
+                log.write(f'No minimum found for {structure_id}. '
+                        'Attempting calculation without symmetry\n')
+
             os.chdir(f'{gulp_dir}/{structure_id}')
 
             failed_dir = 'SYM'
-            failed_files = glob.glob('{structure_id}.*')
+            failed_files = glob.glob(f'{structure_id}*')
             backup_run(failed_files, failed_dir)
 
             new_gulp_input = f'{structure_id}.in'
@@ -53,4 +60,5 @@ with open(summary_file, 'r') as f:
             run_gulp(new_gulp_input, new_gulp_output, new_gulp_log)
 
             os.chdir(run_dir)
-            break
+
+log.close()
