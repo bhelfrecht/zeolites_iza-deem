@@ -6,19 +6,19 @@ import glob
 import numpy as np
 from tqdm import tqdm
 
-# TODO: find way to get consistent structures
-# between GULP output primitive cells
-# and XYZ conventional cells
-
 ev_to_kJmol = 96.485307
 
 cif_dir = '../Raw_Data/DEEM_330k/CIF'
-#xyz_dir = '../Raw_Data/DEEM_330k/XYZ'
 gulp_dir = '../Raw_Data/GULP/DEEM_330k'
 cif_files = sorted(glob.glob(f'{cif_dir}/*/*.cif'))
-#xyz_files = sorted(glob.glob(f'{xyz_dir}/*/*.xyz'))
+summary_file = f'{gulp_dir}/optimization_summary.dat'
+summary_file_fix = f'{gulp_dir}/optimization_summary_fix.dat'
 
-g = open('../Raw_Data/GULP/DEEM_330k/optimization_summary.dat', 'w')
+if os.path.exists(summary_file):
+    g = open(summary_file_fix, 'w')
+else:
+    g = open(summary_file, 'w')
+
 g.write('# ID | Database Energy | GULP Energy | '
         'GULP Gnorm | Minimum Failed | GULP Failed')
 for cdx, cif_file in enumerate(tqdm(cif_files)):
@@ -57,8 +57,6 @@ for cdx, cif_file in enumerate(tqdm(cif_files)):
                 gulp_gnorm = float(line.strip().split()[-1])
                 break
     
-    # TODO: check cell parameters and atomic positions against XYZ
-
     g.write(f'\n{structure_id:7d}  {cif_energy:15.8f}  {gulp_energy:15.8f}  '
             f'{gulp_gnorm:15.8f}  {gulp_minimum_failed:1d}  {gulp_failed:1d}')
 
