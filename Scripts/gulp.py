@@ -172,6 +172,7 @@ def cif2gulp(cif_name, gulp_name, library_file):
     g = open(gulp_name, 'w')
     
     # Optimization options
+    #g.write('opti conv shell kjmol\n')
     g.write('opti conv shell\n')
     
     # Title info
