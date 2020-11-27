@@ -29,13 +29,14 @@ def run_gulp(gulp_input, gulp_output, gulp_log):
     gulp_out.close()
     gulp_log.close()
 
-def cif2gulp(cif_name, gulp_name, library_file):
+def cif2gulp(cif_name, gulp_name, gulp_keywords, library_file):
     """
         Read CIF files and turn them into GULP input files
 
         ---Arguments---
         input_name: name of CIF file
         output_name: name of GULP input file
+        gulp_keywords: input keyword(s) for GULP
         library_file: name of the library file
     """
     # TODO: make more compatible with COD structures
@@ -173,7 +174,7 @@ def cif2gulp(cif_name, gulp_name, library_file):
     
     # Optimization options
     #g.write('opti conv shell kjmol\n')
-    g.write('opti conv shell\n')
+    g.write(f'{gulp_keywords}\n')
     
     # Title info
     g.write('title\n')
@@ -254,8 +255,12 @@ if __name__ == '__main__':
             help='Directory containing the CIF files')
     parser.add_argument('gulp', type=str,
             help='Directory to store the GULP calculations')
-    parser.add_argument('-l', '--library', type=str, default='.',
+    parser.add_argument('-l', '--library', type=str, 
+            default='../Raw_Data/GULP/catlow_mod.lib',
             help='Path to the library file')
+    parser.add_argument('-kw', '--keywords', type=str, 
+            default='opti conv shell',
+            help='Keyword arguments for GULP')
     args = parser.parse_args()
 
     # Prepare for GULP run
@@ -286,7 +291,7 @@ if __name__ == '__main__':
 
         # Make GULP input files
         cif2gulp(os.path.relpath(cif_file, start=gulp_run_dir), gulp_input,
-                os.path.relpath(library_file, start=gulp_run_dir))
+                args.keywords, os.path.relpath(library_file, start=gulp_run_dir))
     
         # Run GULP
         run_gulp(gulp_input, gulp_output, gulp_log) 
