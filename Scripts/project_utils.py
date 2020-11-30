@@ -493,7 +493,7 @@ def regression_check(train_data, test_data,
     
     return predicted_train_target, predicted_test_target
 
-def preprocess_data(train_data, test_data):
+def preprocess_data(train_data, test_data, scale='feature'):
     """
         Center and scale data so that the column means
         are zero and the column variances are 1/n_features
@@ -501,6 +501,8 @@ def preprocess_data(train_data, test_data):
         ---Arguments---
         train_data: data for the training set
         test_data: data for the test set
+        scale: type of scaling: by feature ('feature')
+            or global scaling ('global')
 
         ---Returns---
         train_data: centered and scaled training data
@@ -515,9 +517,13 @@ def preprocess_data(train_data, test_data):
     train_data -= train_center
     test_data -= train_center
 
+    # TODO: clean this up so error is raised if scaling keyword isn't recognized
+    # TODO: could we also just use the global scaling for the SVM SOAPs for consistency?
     if train_data.ndim == 1:
         train_scale = np.linalg.norm(train_data) / np.sqrt(train_data.size)
-    else:
+    elif scale == 'global':
+        train_scale = np.linalg.norm(train_data) / np.sqrt(train_data.shape[0])
+    elif scale == 'feature':
         train_scale = np.linalg.norm(train_data, axis=0) / np.sqrt(train_data.shape[0] / train_data.shape[1])
 
     train_data /= train_scale
