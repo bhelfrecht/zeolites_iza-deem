@@ -9,7 +9,7 @@ from ase.io import read, write
 from ase import Atoms
 import spglib as spg
 
-symprec = 1.0E-3
+symprec = 1.0E-2
 xyz_dir = '../Raw_Data/DEEM_330k/XYZ'
 gulp_dir = '../Raw_Data/GULP/DEEM_330k'
 xyz_files = sorted(glob.glob(f'{xyz_dir}/8*-8*/*.xyz'))
