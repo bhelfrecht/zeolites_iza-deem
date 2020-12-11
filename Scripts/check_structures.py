@@ -9,6 +9,10 @@ from ase.io import read, write
 from ase import Atoms
 import spglib as spg
 
+# NOTE: this is mostly robust, but some structures
+# still might "look" different according
+# to the cell errors but are actually the same,
+# depending on how we set the symprec
 symprec = 1.0E-2
 xyz_dir = '../Raw_Data/DEEM_330k/XYZ'
 gulp_dir = '../Raw_Data/GULP/DEEM_330k'
