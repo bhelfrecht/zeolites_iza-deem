@@ -49,39 +49,51 @@ def save_hdf5(filename, data, attrs={}):
 
     f.close()
 
-# TODO: rename this or make a more general HDF5 loading function
 # TODO: move to utils/tools.py
-def load_structures_from_hdf5(filename, datasets=None, concatenate=False):
+def load_hdf5(filename, datasets=None, indices=None, concatenate=False):
     """
-        Load structure-based data from an HDF5 file
+        Load data from an HDF5 file
 
         ---Arguments---
         filename: name of the HDF5 file to load from
-        datasets: list of dataset names to load data from
+        datasets: list of dataset names to load data from.
+            If None, loads all datasets.
+        indices: list of (arrays of) indices to load from each dataset.
+            If None, loads all data from the selected datasets.
+            Can be provided as a tuple for multidimensional
+            numpy indexing.
         concatenate: whether to concatenate the loaded datasets
-            into a single array
-
+            into a single array. If only one dataset is present,
+            use `concatenate=True` to return the array
+            instead of a one-element list
         ---Returns---
-        structure_values: data loaded from the HDF5 file
+        dataset_values: data loaded from the HDF5 file
     """
 
-    structure_values = []
+    dataset_values = []
 
     f = h5py.File(filename, 'r')
 
-    if datasets is not None:
-        for dataset_name in datasets:
-            structure_values.append(f[dataset_name][:])
-    else:
-        for structure_value in f.values():
-            structure_values.append(structure_value[:])
+    if datasets is None:
+
+        # f.keys() returns a view, so to get the actual
+        # names we need list comprehension
+        datasets = [key for key in f.keys()]
+
+    if indices is None:
+        indices = [slice(None)] * len(datasets)
+    elif isinstance(indices, np.ndarray):
+        indices = [indices]
+
+    for dataset_name, idxs in zip(datasets, indices):
+        dataset_values.append(f[dataset_name][idxs])
 
     f.close()
 
     if concatenate:
-        structure_values = np.vstack(structure_values)
+        dataset_values = np.vstack(dataset_values)
 
-    return structure_values
+    return dataset_values
 
 def df_to_class(df, df_type, n_classes):
     """
