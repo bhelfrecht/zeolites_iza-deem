@@ -170,11 +170,11 @@ def load_soaps(deem_file, iza_file,
     """
 
     # Load SOAPs
-    soaps_deem = load_structures_from_hdf5(deem_file, datasets=None, concatenate=False)
+    soaps_deem = load_hdf5(deem_file, datasets=None, concatenate=False)
     for i in sorted(idxs_deem_delete, reverse=True):
         soaps_deem.pop(i)
 
-    soaps_iza = load_structures_from_hdf5(iza_file, datasets=None, concatenate=False)
+    soaps_iza = load_hdf5(iza_file, datasets=None, concatenate=False)
     for i in sorted(idxs_iza_delete, reverse=True):
         soaps_iza.pop(i)
 
