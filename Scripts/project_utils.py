@@ -4,6 +4,8 @@ import os
 import sys
 import numpy as np
 import h5py
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import KernelCenterer
 from sklearn.utils.multiclass import _ovr_decision_function
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix
@@ -11,9 +13,82 @@ from sklearn.metrics import classification_report, confusion_matrix
 sys.path.append('/home/helfrech/Tools/Toolbox/utils')
 from kernels import build_kernel
 from kernels import center_kernel_fast, center_kernel_oos_fast
+from kernels import gaussian_kernel, linear_kernel
 from regression import LR, KRR
 from regression import PCovR, KPCovR
 from tools import save_json
+
+# TODO: make more flexible, e.g., featurewise scaling
+class NormScaler(BaseEstimator, TransformerMixin):
+    def __init__(self, with_mean=True, with_norm=True):
+        self.with_mean = with_mean
+        self.with_norm = with_norm
+
+    def fit(self, X, y=None):
+        if self.with_mean:
+            self.mean_ = np.mean(X, axis=0)
+        else:
+            self.mean_ = None
+
+        if self.with_norm and self.mean_ is not None:
+            self.norm_ = np.linalg.norm(X - self.mean_) / np.sqrt(len(X))
+        elif self.with_norm:
+            self.norm_ = np.linalg.norm(X) / np.sqrt(len(x))
+        else:
+            self.norm_ = None
+
+    def transform(self, X):
+        if self.mean_ is not None:
+            X = X - self.mean_
+
+        if self.norm_ is not None:
+            X = X / self.norm_
+
+        return X
+
+class KernelNormScaler(BaseEstimator, TransformerMixin):
+    def __init__(self, with_mean=True, with_norm=True):
+        self.with_mean = with_mean
+        self.with_norm = with_norm
+
+    def fit(self, K, y=None):
+        if with_mean:
+            self.centerer_ = KernelCenterer().fit(K)
+        else:
+            self.centerer_ = None
+
+        if with_norm:
+            self.norm_ = np.trace(self.centerer_.transform(K)) / K.shape[0]
+        else:
+            self.norm_ = None
+
+    def transform(self, K):
+        if self.centerer_ is not None:
+            K = self.centerer_.transform(K)
+
+        if self.norm_ is not None:
+            K = K / self.norm_
+
+        return K
+
+# TODO: linear kernel option as well?
+class KernelConstructor(BaseEstimator, TransformerMixin):
+    def __init__(self, gamma=1.0):
+        self.gamma = gamma
+
+    def fit(self, X, y=None):
+        self.X_train = X
+
+    def transform(self, X):
+        return gaussian_kernel(X, self.X_train, gamma=self.gamma)
+
+def cv_generator(cv_idxs):
+    k = cv_idxs.shape[1]
+    for kdx in range(0, k):
+        k_list = list(range(0, k))
+        test_idxs = cv_idxs[:, kdx]
+        train_idxs = np.concatenate(cv_idxs[:, k_list.pop(kdx)])
+        yield train_idxs, test_idxs
 
 # TODO: move to utils/tools.py
 def save_hdf5(filename, data, attrs={}):
