@@ -37,12 +37,23 @@ class NormScaler(BaseEstimator, TransformerMixin):
         else:
             self.norm_ = None
 
+        return self
+
     def transform(self, X):
         if self.mean_ is not None:
             X = X - self.mean_
 
         if self.norm_ is not None:
             X = X / self.norm_
+
+        return X
+
+    def inverse_transform(self, X):
+        if self.norm_ is not None:
+            X = X * self.norm_
+
+        if self.mean_ is not None:
+            X = X + self.mean_
 
         return X
 
@@ -62,12 +73,26 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         else:
             self.norm_ = None
 
+        return self
+
     def transform(self, K):
         if self.centerer_ is not None:
             K = self.centerer_.transform(K)
 
         if self.norm_ is not None:
             K = K / self.norm_
+
+        return K
+
+    def inverse_transform(self, K):
+        if self.norm_ is not None:
+            K = K * self.norm_
+
+        if self.centerer_ is not None:
+            K_fit_rows = self.centerer_.K_fit_rows_
+            K_fit_all = self.centerer_.K_fit_all_
+            K_pred_cols = np.mean(K, axis=1)
+            K = K - K_fit_all + K_pred_cols + K_fit_rows
 
         return K
 
@@ -78,6 +103,7 @@ class KernelConstructor(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         self.X_train = X
+        return self
 
     def transform(self, X):
         return gaussian_kernel(X, self.X_train, gamma=self.gamma)
@@ -86,8 +112,9 @@ def cv_generator(cv_idxs):
     k = cv_idxs.shape[1]
     for kdx in range(0, k):
         k_list = list(range(0, k))
+        k_list.pop(kdx)
         test_idxs = cv_idxs[:, kdx]
-        train_idxs = np.concatenate(cv_idxs[:, k_list.pop(kdx)])
+        train_idxs = np.concatenate(cv_idxs[:, k_list])
         yield train_idxs, test_idxs
 
 # TODO: move to utils/tools.py
