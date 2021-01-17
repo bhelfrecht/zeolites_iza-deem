@@ -18,22 +18,31 @@ from regression import LR, KRR
 from regression import PCovR, KPCovR
 from tools import save_json
 
-# TODO: make more flexible, e.g., featurewise scaling
 class NormScaler(BaseEstimator, TransformerMixin):
-    def __init__(self, with_mean=True, with_norm=True):
+    def __init__(self, with_mean=True, with_norm=True, featurewise=False):
         self.with_mean = with_mean
         self.with_norm = with_norm
+        self.featurewise = featurewise
 
     def fit(self, X, y=None):
+
+        if self.featurewise:
+            axis = 0
+            n_cols = X.shape[1]
+        else:
+            axis = None
+            n_cols = 1
+
         if self.with_mean:
             self.mean_ = np.mean(X, axis=0)
         else:
             self.mean_ = None
 
         if self.with_norm and self.mean_ is not None:
-            self.norm_ = np.linalg.norm(X - self.mean_) / np.sqrt(len(X))
+            self.norm_ = np.linalg.norm(X - self.mean_, axis=axis) \
+                    / np.sqrt(len(X) / n_cols)
         elif self.with_norm:
-            self.norm_ = np.linalg.norm(X) / np.sqrt(len(x))
+            self.norm_ = np.linalg.norm(X, axis=axis) / np.sqrt(len(x) / n_cols)
         else:
             self.norm_ = None
 
