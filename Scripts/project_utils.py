@@ -126,6 +126,16 @@ def cv_generator(cv_idxs):
         train_idxs = np.concatenate(cv_idxs[:, k_list])
         yield train_idxs, test_idxs
 
+def get_optimal_parameters(cv_results, scoring, **base_parameters):
+    idx = np.argmin(cv_results[f'rank_test_{scoring}'])
+    opt_parameters = base_parameters.copy()
+
+    for key, value in cv_results['params'][idx].items():
+        split_key = key.split('__')[-1]
+        opt_parameters[split_key] = value
+
+    return opt_parameters
+
 # TODO: move to utils/tools.py
 def save_hdf5(filename, data, attrs={}):
     """
@@ -203,6 +213,8 @@ def load_hdf5(filename, datasets=None, indices=None, concatenate=False):
 
     if concatenate:
         dataset_values = np.vstack(dataset_values)
+    elif len(dataset_values) == 1:
+        dataset_values = dataset_values[0]
 
     return dataset_values
 
