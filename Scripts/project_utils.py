@@ -14,17 +14,87 @@ sys.path.append('/home/helfrech/Tools/Toolbox/utils')
 from kernels import build_kernel
 from kernels import center_kernel_fast, center_kernel_oos_fast
 from kernels import gaussian_kernel, linear_kernel
+from kernels import sqeuclidean_distances
 from regression import LR, KRR
 from regression import PCovR, KPCovR
 from tools import save_json
+import functools
+
+def get_basename(path):
+    """
+        Shorthand for getting the file prefix
+        from a given file path
+
+        ---Arguments---
+        path: path to the file
+
+        ---Returns---
+        file_prefix: filename without base
+            directory path or extension
+    """
+    return os.path.splitext(os.path.basename(path))[0]
+
+def removesuffix(string, suffix):
+    """
+        Remove the suffix from a string.
+        Built-in string method in Python 3.9;
+        we reproduce it here
+    
+        ---Arguments---
+        string: string from which to remove the suffix
+        suffix: substring to remove
+
+        ---Returns---
+        string: string with suffix removed
+    """
+    if suffix in string and len(suffix) > 0:
+        string = string[0:-len(suffix)]
+    return string
+
+def removeprefix(string, prefix):
+    """
+        Remove the prefix from a string.
+        Built-in string method in Python 3.9;
+        we reproduce it here
+
+        ---Arguments---
+        string: string from which to remove the prefix
+        prefix: substring to remove
+
+        ---Returns---
+        string: string with prefix removed
+    """
+    if prefix in string and len(prefix) > 0:
+        string = string[len(prefix):]
+    return string
 
 class NormScaler(BaseEstimator, TransformerMixin):
+    """
+        A scaler than can scale by mean and by
+        columnwise or global norm
+
+        ---Attributes---
+        with_mean: whether to center the data
+        with_norm: whether to scale the data by a norm
+        featurewise: scale by columnwise norm
+
+        ---Methods---
+        fit: fit the scaler (with training data)
+        transform: apply centering and scaling
+        inverse_transform: undo centering and scaling
+    """
     def __init__(self, with_mean=True, with_norm=True, featurewise=False):
         self.with_mean = with_mean
         self.with_norm = with_norm
         self.featurewise = featurewise
 
     def fit(self, X, y=None):
+        """
+            Fit the scaler
+
+            ---Arguments---
+            X: data from which we calculate the mean and/or norm
+        """
 
         if self.featurewise:
             axis = 0
@@ -49,6 +119,15 @@ class NormScaler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        """
+            Apply centering and/or scaling
+
+            ---Arguments---
+            X: data to center and/or scale
+        
+            ---Returns---:
+            X: centered and/or scaled X
+        """
         if self.mean_ is not None:
             X = X - self.mean_
 
@@ -58,6 +137,15 @@ class NormScaler(BaseEstimator, TransformerMixin):
         return X
 
     def inverse_transform(self, X):
+        """
+            Undo centering and scaling
+
+            ---Arguments---
+            X: data from which to remove centering and/or scaling
+
+            ---Returns---
+            X: unscaled and uncentered X
+        """
         if self.norm_ is not None:
             X = X * self.norm_
 
@@ -67,17 +155,35 @@ class NormScaler(BaseEstimator, TransformerMixin):
         return X
 
 class KernelNormScaler(BaseEstimator, TransformerMixin):
+    """
+        Centerer and scaler for kernels
+
+        ---Attributes---
+        with_mean: whether to center the kernel
+        with_norm: whether to scale the kernel
+
+        ---Methods---
+        fit: fit the scaler (with training data)
+        transform: apply centering and scaling
+        inverse_transform: undo centering and scaling
+    """
     def __init__(self, with_mean=True, with_norm=True):
         self.with_mean = with_mean
         self.with_norm = with_norm
 
     def fit(self, K, y=None):
-        if with_mean:
+        """
+            Compute the kernel centering and scaling
+
+            ---Arguments---
+            K: kernel with which to compute the centering and/or scaling
+        """
+        if self.with_mean:
             self.centerer_ = KernelCenterer().fit(K)
         else:
             self.centerer_ = None
 
-        if with_norm:
+        if self.with_norm:
             self.norm_ = np.trace(self.centerer_.transform(K)) / K.shape[0]
         else:
             self.norm_ = None
@@ -85,6 +191,15 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, K):
+        """
+            Apply centering and scaling to a kernel
+
+            ---Arguments---
+            K: kernel on which to apply the centering and/or scaling
+
+            ---Returns---
+            K: centered and/or scaled kernel
+        """
         if self.centerer_ is not None:
             K = self.centerer_.transform(K)
 
@@ -94,6 +209,15 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         return K
 
     def inverse_transform(self, K):
+        """
+            Undo centering and scaling of a kernel
+
+            ---Arguments---
+            K: kernel on which to undo the centering and/or scaling
+
+            ---Returns---
+            K: uncentered and unscaled kernel
+        """
         if self.norm_ is not None:
             K = K * self.norm_
 
@@ -261,6 +385,7 @@ def df_to_class(df, df_type, n_classes):
 
     return predicted_class
 
+##### DELETE BEGIN #####
 def load_soaps(deem_file, iza_file,
         idxs_deem_train, idxs_deem_test,
         idxs_iza_train, idxs_iza_test,
@@ -810,6 +935,7 @@ def do_pcovr(train_data, test_data, train_targets, test_targets,
         save_json(pcovr.__dict__, save_model, array_convert=True)
     
     return outputs
+##### DELETE END #####
 
 def generate_reports(cantons_train, cantons_test,
         predicted_cantons_train, predicted_cantons_test,
