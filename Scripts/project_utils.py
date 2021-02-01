@@ -241,6 +241,61 @@ class KernelConstructor(BaseEstimator, TransformerMixin):
     def transform(self, X):
         return gaussian_kernel(X, self.X_train, gamma=self.gamma)
 
+# TODO: index selection class
+
+class MalleableGaussianKernel(object):
+    def __init__(self, delta=1.0E-12, max_terms=15):
+        self.delta = delta
+        self.max_terms = max_terms
+        self.n_factorial = np.cumprod(np.arange(0, max_terms))
+
+    def _fit(self, XA, XB):
+        D = sqeuclidean_distances(XA, XB)
+        powers = np.zeros((len(XA), len(XB), self.max_terms))
+        for n in range(0, self.max_terms):
+            powers[:, :, n] = D ** n
+
+        return powers
+
+    def fit_decorator(func):
+
+        @functools.wraps(func)
+        def fit_wrapper(XA, XB, **kwargs):
+            self.powers = np.zeros((len(XA), len(XB), self.max_terms))
+            if isinstance(XA, list) and isinstance(XB, list):
+                for adx, a in enumerate(XA):
+                    for bdx, b in enumerate(XB):
+                        self.powers[adx, bdx, :] = np.mean(self._fit(a, b), axis=(0, 1))
+
+            elif isinstance(XA, list):
+                for adx, a in enumerate(XA):
+                    self.powers[adx, :, :] = np.mean(self._fit(a, XB), axis=0)
+
+            elif isinstance(XB, list):
+                for bdx, b in enumerate(XB):
+                    self.powers[:, bdx, :] = np.mean(self._fit(XA, b), axis=1)
+
+            else:
+                self.powers[:, :, n] = self._fit(XA, XB)
+
+        return fit_wrapper
+
+    @fit_decorator
+    def fit(self, XA, XB):
+        self.powers = np.zeros((max_terms, len(XA), len(XB)))
+        return self
+
+    def transform(self, gamma=1.0):
+        K = np.zeros(self.K_shape)
+        for n in range(0, max_terms):
+            k = self.powers[:, :, n] * (-gamma) ** n / self.n_factorial[n]
+            K += k
+            if np.linalg.norm(k) / np.sqrt(k.shape[0]) <= delta:
+                break
+
+        print('Warning: reached maximum number of expansion terms')
+        return K
+
 def cv_generator(cv_idxs):
     k = cv_idxs.shape[1]
     for kdx in range(0, k):
