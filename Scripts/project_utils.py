@@ -18,7 +18,7 @@ from kernels import sqeuclidean_distances
 from regression import LR, KRR
 from regression import PCovR, KPCovR
 from tools import save_json
-import functools
+from copy import deepcopy
 
 def get_basename(path):
     """
@@ -241,60 +241,98 @@ class KernelConstructor(BaseEstimator, TransformerMixin):
     def transform(self, X):
         return gaussian_kernel(X, self.X_train, gamma=self.gamma)
 
-# TODO: index selection class
+class SampleSelector(BaseEstimator, TransformerMixin):
+    def __init__(self, X=None, model=None):
+        self.X = X
+        self.model = model
 
-class MalleableGaussianKernel(object):
-    def __init__(self, delta=1.0E-12, max_terms=15):
-        self.delta = delta
-        self.max_terms = max_terms
-        self.n_factorial = np.cumprod(np.arange(0, max_terms))
+    def fit(self, idxs, **fit_params):
+        if self.model is not None:
+            self.model_ = deepcopy(self.model)
+            self.model.fit(self.X[idxs], **fit_params)
 
-    def _fit(self, XA, XB):
-        D = sqeuclidean_distances(XA, XB)
-        powers = np.zeros((len(XA), len(XB), self.max_terms))
-        for n in range(0, self.max_terms):
-            powers[:, :, n] = D ** n
-
-        return powers
-
-    def fit_decorator(func):
-
-        @functools.wraps(func)
-        def fit_wrapper(XA, XB, **kwargs):
-            self.powers = np.zeros((len(XA), len(XB), self.max_terms))
-            if isinstance(XA, list) and isinstance(XB, list):
-                for adx, a in enumerate(XA):
-                    for bdx, b in enumerate(XB):
-                        self.powers[adx, bdx, :] = np.mean(self._fit(a, b), axis=(0, 1))
-
-            elif isinstance(XA, list):
-                for adx, a in enumerate(XA):
-                    self.powers[adx, :, :] = np.mean(self._fit(a, XB), axis=0)
-
-            elif isinstance(XB, list):
-                for bdx, b in enumerate(XB):
-                    self.powers[:, bdx, :] = np.mean(self._fit(XA, b), axis=1)
-
-            else:
-                self.powers[:, :, n] = self._fit(XA, XB)
-
-        return fit_wrapper
-
-    @fit_decorator
-    def fit(self, XA, XB):
-        self.powers = np.zeros((max_terms, len(XA), len(XB)))
         return self
 
-    def transform(self, gamma=1.0):
-        K = np.zeros(self.K_shape)
-        for n in range(0, max_terms):
-            k = self.powers[:, :, n] * (-gamma) ** n / self.n_factorial[n]
-            K += k
-            if np.linalg.norm(k) / np.sqrt(k.shape[0]) <= delta:
-                break
+    def transform(self, idxs):
+        if self.model is not None:
+            T = self.model.transform(self.X[idxs])
+        else:
+            T = self.X[idxs]
 
-        print('Warning: reached maximum number of expansion terms')
-        return K
+        return T
+
+    # Need an inverse transform for the TransformedTargetRegressor
+    # TODO: how should this actually work?
+    def inverse_transform(self, X):
+        return X
+
+class KernelLoader(BaseEstimator, TransformerMixin):
+    def __init__(self, filename=None, **load_args):
+                
+        # Filename is actually required, but give it
+        # a default of None to be compatible with sklearn
+        self.filename = filename
+        self.load_args = load_args
+
+    def fit(self, idxs, y=None):
+        self.K = load_hdf5(self.filename, **self.load_args)
+        self.idxs_train = idxs.flatten()
+        return self
+
+    def transform(self, idxs):
+        return self.K[idxs.flatten(), :][:, self.idxs_train]     
+
+#class MalleableGaussianKernel(object):
+#    def __init__(self, delta=1.0E-12, max_terms=15):
+#        self.delta = delta
+#        self.max_terms = max_terms
+#        self.n_factorial = np.insert(np.cumprod(np.arange(1, max_terms)), 0, 1)
+#
+#    def _fit(self, XA, XB):
+#        D = sqeuclidean_distances(XA, XB)
+#        powers = np.zeros((len(XA), len(XB), self.max_terms))
+#        for n in range(0, self.max_terms):
+#            powers[:, :, n] = D ** n
+#
+#        return powers
+#
+#    def fit(self, XA, XB):
+#        self.powers = np.zeros((len(XA), len(XB), self.max_terms))
+#        if isinstance(XA, list) and isinstance(XB, list):
+#            for adx, a in enumerate(XA):
+#                for bdx, b in enumerate(XB):
+#                    self.powers[adx, bdx, :] = np.mean(
+#                        self._fit(a, b), axis=(0, 1)
+#                    )
+#
+#        elif isinstance(XA, list):
+#            for adx, a in enumerate(XA):
+#                self.powers[adx, :, :] = np.mean(
+#                    self._fit(a, XB), axis=0
+#                )
+#
+#        elif isinstance(XB, list):
+#            for bdx, b in enumerate(XB):
+#                self.powers[:, bdx, :] = np.mean(
+#                    self._fit(XA, b), axis=1
+#                )
+#
+#        else:
+#            self.powers = self._fit(XA, XB)
+#
+#        return self
+#
+#    def transform(self, gamma=1.0):
+#        K = np.zeros(self.powers.shape[0:-1])
+#        for n in range(0, self.max_terms):
+#            k = self.powers[:, :, n] * (-gamma) ** n / self.n_factorial[n]
+#            K += k
+#            # TODO: how to handle breaking and max_terms?
+#            #if np.linalg.norm(k) / np.sqrt(k.shape[0]) <= delta:
+#            #    break
+#
+#        print('Warning: reached maximum number of expansion terms')
+#        return K
 
 def cv_generator(cv_idxs):
     k = cv_idxs.shape[1]
@@ -316,7 +354,7 @@ def get_optimal_parameters(cv_results, scoring, **base_parameters):
     return opt_parameters
 
 # TODO: move to utils/tools.py
-def save_hdf5(filename, data, attrs={}):
+def save_hdf5(filename, data, chunks=None, attrs={}):
     """
         Save an array or list of arrays to an HDF5 file
 
@@ -338,7 +376,7 @@ def save_hdf5(filename, data, attrs={}):
             # we create datasets with names in alphanumeric order
             f.create_dataset(str(ddx).zfill(n_digits), data=d)
     else:
-        f.create_dataset('0', data=data)
+        f.create_dataset('0', data=data, chunks=chunks)
 
     # Add attributes
     for k, v in attrs.items():
