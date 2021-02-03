@@ -26,7 +26,7 @@ for xyz_dir in xyz_dirs:
         f'{xyz_dir_base}/{xyz_dir}/*.cif.xyz',
         gulp_dir,
         '-lf', library_file,
-        '-kw', "'opti conv shell'"
+        '-kw', 'opti conv shell'
     ])
     processes.append(p)
 
