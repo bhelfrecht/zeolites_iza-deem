@@ -396,7 +396,7 @@ def xyz2gulp(xyz_name, gulp_name, gulp_keywords, library_file):
         for line in lines:
             atom = line.strip().split()
             symbols.append(atom[0])
-            positions.append('\t'.join(atom[1:]))
+            positions.append('\t'.join(atom[1:4]))
 
     # Extract cell information from the header
     header = shlex.split(header)
