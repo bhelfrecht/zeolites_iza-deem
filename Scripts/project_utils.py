@@ -9,6 +9,7 @@ from sklearn.preprocessing import KernelCenterer
 from sklearn.utils.multiclass import _ovr_decision_function
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.append('/home/helfrech/Tools/Toolbox/utils')
 from kernels import build_kernel
@@ -230,43 +231,33 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         return K
 
 # TODO: linear kernel option as well?
-class KernelConstructor(BaseEstimator, TransformerMixin):
-    def __init__(self, gamma=1.0):
-        self.gamma = gamma
-
-    def fit(self, X, y=None):
-        self.X_train = X
-        return self
-
-    def transform(self, X):
-        return gaussian_kernel(X, self.X_train, gamma=self.gamma)
-
-class SampleSelector(BaseEstimator, TransformerMixin):
-    def __init__(self, X=None, model=None):
-        self.X = X
-        self.model = model
-
-    def fit(self, idxs, **fit_params):
-        if self.model is not None:
-            self.model_ = deepcopy(self.model)
-            self.model.fit(self.X[idxs], **fit_params)
-
-        return self
-
-    def transform(self, idxs):
-        if self.model is not None:
-            T = self.model.transform(self.X[idxs])
-        else:
-            T = self.X[idxs]
-
-        return T
-
-    # Need an inverse transform for the TransformedTargetRegressor
-    # TODO: how should this actually work?
-    def inverse_transform(self, X):
-        return X
+#class KernelConstructor(BaseEstimator, TransformerMixin):
+#    def __init__(self, gamma=1.0):
+#        self.gamma = gamma
+#
+#    def fit(self, X, y=None):
+#        self.X_train = X
+#        return self
+#
+#    def transform(self, X):
+#        return gaussian_kernel(X, self.X_train, gamma=self.gamma)
 
 class KernelLoader(BaseEstimator, TransformerMixin):
+    """
+        Class to load kernels from a file for use in an sklearn pipeline
+
+        ---Attributes---
+        filename: filename from which the kernel will be loaded
+        load_args: keyword arguments passed to the function
+            for loading the kernel (currently assumes load_hdf5)
+        idxs_train: train indices to extract from the kernel
+        K: the kernel matrix
+
+        ---Methods---
+        fit: load the kernel and set the training indices
+        transform: slice the kernel and return the corresponding
+            values as a (subkernel) matrix
+    """
     def __init__(self, filename=None, **load_args):
                 
         # Filename is actually required, but give it
@@ -275,11 +266,34 @@ class KernelLoader(BaseEstimator, TransformerMixin):
         self.load_args = load_args
 
     def fit(self, idxs, y=None):
+        """
+            Load the kernel and set the train indices
+
+            ---Arguments---
+            idxs: train indices (column indices to select)
+            y: ignored; for consistency with other sklearn fit methods
+
+            ---Returns---
+            self: fitted kernel loader
+        """
         self.K = load_hdf5(self.filename, **self.load_args)
         self.idxs_train = idxs.flatten()
         return self
 
     def transform(self, idxs):
+        """
+            Slice the kernel and return the values
+
+            ---Arguments---
+            idxs: row indices to select
+
+            ---Returns---
+            K: sliced kernel (the subkernel defined by
+                the indices (idxs, self.idxs_train),
+                where self.idxs_train are those indices
+                passed during the fit
+        """
+
         return self.K[idxs.flatten(), :][:, self.idxs_train]     
 
 #class MalleableGaussianKernel(object):
@@ -334,7 +348,143 @@ class KernelLoader(BaseEstimator, TransformerMixin):
 #        print('Warning: reached maximum number of expansion terms')
 #        return K
 
+class SampleSelector(BaseEstimator, TransformerMixin):
+    """
+        Wrapper class for selecting samples by index
+        and passing them to another transformer
+
+        ---Attributes---
+        model: model that will be (deep) copied and used
+            to fit/transform the selected samples, if given
+        model_: fitted model
+        X: the dataset from which samples will be selected
+
+        ---Methods---
+        fit: copy the model and fit with samples from self.X
+        transform: transform samples from self.X
+        inverse_transform: inverse_transform samples
+    """
+
+    def __init__(self, X=None, model=None):
+
+        # X is actually required to get things to work,
+        # but has to be a keyword argument for sklearn.
+        # model is optional, in which case transforms
+        # will just return the selected samples from X
+        self.X = X
+        self.model = model
+        self.model_ = None
+
+    def fit(self, idxs, **fit_params):
+        """
+            Copy and fit the stored model
+
+            ---Arguments---
+            idxs: sample indices to use to fit the model
+            fit_params: additional parameters to pass to the model fit
+
+            ---Returns---
+            self: selector with fitted model, if provided
+                upon initialization
+        """
+
+        if self.model is not None:
+            self.model_ = deepcopy(self.model)
+            self.model_.fit(self.X[idxs.flatten()], **fit_params)
+
+        return self
+
+    def transform(self, idxs):
+        """
+            Transform according to the stored model
+
+            ---Arguments---
+            idxs: sample indices to transform
+
+            ---Returns---
+            T: if a model is given in initialization, the transformed
+                data at the input indices (idxs). If a model
+                is not given at initialization, the (untransformed)
+                data at the input indices is returned
+        """
+
+        if self.model_ is not None:
+            T = self.model_.transform(self.X[idxs.flatten()])
+        else:
+            T = self.X[idxs.flatten()]
+
+        return T
+
+    def inverse_transform(self, X):
+        """
+            Perform an inverse transform according to the stored model
+
+            ---Arguments---
+            X: data on which to perform the inverse transform
+
+            ---Returns---
+            iT: if a model is given at initialization,
+                data that has been inverse-transformed. If a model
+                is not given at initialization, the (uninversetransformed)
+                data is returned
+        """
+        if self.model_ is not None:
+            iT = self.model_.inverse_transform(X)
+        else:
+            iT = X
+
+        return iT
+
+def score_by_index(idxs, y_pred, y=None, scorer=mean_absolute_error, **kwargs):
+    """
+        Wrapper function to use scorers that select by index
+        in sklearn pipelines and cross-validation
+
+        ---Arguments---
+        idxs: the indices on which the score will be computed
+        y_pred: the predictions to score
+        y: the reference data; while a keyword argument,
+            this argument is required for the scoring to work
+            properly. It is formally a keyword argument
+            for compatibility with the sklearn scorer infrastructure
+            (e.g., for cross-validation)
+        scorer: the scoring function to use, that has the call signature
+            (y_true, y_pred, **kwargs)
+        kwargs: additional keyword arguments to pass to the scorer
+
+        ---Returns---
+        score: score computed on the indices idxs according
+            to the scorer
+    """
+
+    # In a 'select-by-index' pipeline, y_pred will already
+    # be the correct properties (instead of a set of indices),
+    # so we only need to extract the reference data y
+    # at the appropriate indices
+    if y is not None:
+        score = scorer(y[idxs.flatten()], y_pred, **kwargs)
+
+    # Functions as a normal scorer if y is not provided
+    else:
+        score = scorer(idxs, y_pred, **kwargs)
+
+    return score
+
 def cv_generator(cv_idxs):
+    """
+        A generator yielding (train, test) tuples
+        from a precomputed set of folds, in the shape
+        (n_samples_in_fold, n_folds)
+
+        ---Arguments---
+        cv_idxs: a 2D matrix of folds, with shape
+            (n_samples_in_fold, n_folds)
+
+        ---Yields---
+        train_idxs: indices for training, from k-1 folds
+        test_idxs: indices for validation, a single fold
+    """
+
     k = cv_idxs.shape[1]
     for kdx in range(0, k):
         k_list = list(range(0, k))
@@ -344,9 +494,28 @@ def cv_generator(cv_idxs):
         yield train_idxs, test_idxs
 
 def get_optimal_parameters(cv_results, scoring, **base_parameters):
+    """
+        Extract optimal hyperparameters from an sklearn CV search
+
+        ---Arguments---
+        cv_results: the sklearn CV results
+        scoring: name of the scoring entry in the CV results
+        base_parameters: dictionary of base (i.e., unvarying)
+            parameters for the model of interest.
+            The optimal hyperparameters will be 
+            added to this dictionary.
+
+        ---Returns---
+        opt_parameters: hyperparameters for the model
+            with the lowest error
+    """
+
     idx = np.argmin(cv_results[f'rank_test_{scoring}'])
     opt_parameters = base_parameters.copy()
 
+    # Find the parameter name; ignore the 'double underscore'
+    # notation telling us to which model the parameter belongs to,
+    # as this will be done manually
     for key, value in cv_results['params'][idx].items():
         split_key = key.split('__')[-1]
         opt_parameters[split_key] = value
