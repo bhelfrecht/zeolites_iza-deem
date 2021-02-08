@@ -327,7 +327,7 @@ def gulp_summary(output, gulp_dir, gulp_glob, ref_ext=None, ref_dir=None):
                     if ref_target in line:
                         ref_energy = float(line.strip().split()[-2])
                         break
-            g.write('  {ref_energy:15.8f}')
+            g.write(f'  {ref_energy:15.8f}')
     
         # Extract the energies and Gnorms from the GULP calculation
         n = 0
