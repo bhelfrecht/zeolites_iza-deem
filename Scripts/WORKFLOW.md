@@ -17,9 +17,9 @@ Fixed-cell, shell-only geometry optimizations for Deem
 
 ## Analysis setup
 1.  pre_analysis_checks.ipynb
-1.  compute_soaps.ipynb
 
 ## Core notebooks
+1.  compute_soaps.ipynb
 1.  decomposition.ipynb
 1.  regression_optimization.ipynb
 1.  regression.ipynb
