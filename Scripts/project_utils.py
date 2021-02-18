@@ -106,14 +106,13 @@ class NormScaler(BaseEstimator, TransformerMixin):
 
         if self.with_mean:
             self.mean_ = np.mean(X, axis=0)
+            Xc = X - self.mean_
         else:
             self.mean_ = None
+            Xc = X
 
-        if self.with_norm and self.mean_ is not None:
-            self.norm_ = np.linalg.norm(X - self.mean_, axis=axis) \
-                    / np.sqrt(len(X) / n_cols)
-        elif self.with_norm:
-            self.norm_ = np.linalg.norm(X, axis=axis) / np.sqrt(len(x) / n_cols)
+        if self.with_norm:
+            self.norm_ = np.linalg.norm(Xc, axis=axis) / np.sqrt(len(Xc) / n_cols)
         else:
             self.norm_ = None
 
@@ -181,11 +180,13 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         """
         if self.with_mean:
             self.centerer_ = KernelCenterer().fit(K)
+            Kc = self.centerer.transform(K)
         else:
             self.centerer_ = None
+            Kc = K
 
         if self.with_norm:
-            self.norm_ = np.trace(self.centerer_.transform(K)) / K.shape[0]
+            self.norm_ = np.trace(Kc) / Kc.shape[0]
         else:
             self.norm_ = None
 
