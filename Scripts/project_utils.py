@@ -69,52 +69,78 @@ def removeprefix(string, prefix):
         string = string[len(prefix):]
     return string
 
-class NormScaler(BaseEstimator, TransformerMixin):
+class StandardNormScaler(BaseEstimator, TransformerMixin):
     """
         A scaler than can scale by mean and by
-        columnwise or global norm
+        columnwise or global norm or variance
 
         ---Attributes---
         with_mean: whether to center the data
-        with_norm: whether to scale the data by a norm
-        featurewise: scale by columnwise norm
+        with_scale: whether to scale the data
+        scale_type: how to normalize the data: either by the 
+            trace of the (biased) covariance ('std')
+            or by the L2 norm divided by the square root
+            of the number of samples ('norm')
+        featurewise: scale columnwise
+        sample_weight_: sample weights from the fitting procedure
 
         ---Methods---
         fit: fit the scaler (with training data)
         transform: apply centering and scaling
         inverse_transform: undo centering and scaling
     """
-    def __init__(self, with_mean=True, with_norm=True, featurewise=False):
+    def __init__(
+        self,
+        with_mean=True, 
+        with_scale=True, 
+        scale_type='norm',
+        featurewise=False, 
+    ):
         self.with_mean = with_mean
-        self.with_norm = with_norm
+        self.with_scale = with_scale
+        self.scale_type = scale_type
         self.featurewise = featurewise
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, sample_weight=None):
         """
             Fit the scaler
 
             ---Arguments---
-            X: data from which we calculate the mean and/or norm
+            X: data from which we calculate the mean and/or scale
+            y: ignored
+            sample_weight: sample weights for weighted mean centering
         """
 
-        if self.featurewise:
-            axis = 0
-            n_cols = X.shape[1]
-        else:
-            axis = None
-            n_cols = 1
+        if sample_weight is not None:
+            sample_weight = sample_weight / np.sum(sample_weight)
+
+        self.sample_weight_ = sample_weight
 
         if self.with_mean:
-            self.mean_ = np.mean(X, axis=0)
+            self.mean_ = np.average(X, weights=self.sample_weight_, axis=0)
             Xc = X - self.mean_
         else:
             self.mean_ = None
             Xc = X
 
-        if self.with_norm:
-            self.norm_ = np.linalg.norm(Xc, axis=axis) / np.sqrt(len(Xc) / n_cols)
+        if self.with_scale:
+            if self.scale_type == 'std':
+                Xm = np.average(X, weights=self.sample_weight_, axis=0)
+                feature_variances = np.average(
+                    (X - Xm) ** 2, weights=self.sample_weight_, axis=0
+                )
+                if self.featurewise:
+                    self.scale_ = np.sqrt(feature_variances)
+                else:
+                    self.scale_ = np.sqrt(np.sum(feature_variances))
+            elif self.scale_type == 'norm':
+                if self.featurewise:
+                    self.scale_ = np.linalg.norm(Xc, axis=0) \
+                        / np.sqrt(Xc.shape[0] / Xc.shape[1])
+                else:
+                    self.scale_ = np.linalg.norm(Xc) / np.sqrt(Xc.shape[0])
         else:
-            self.norm_ = None
+            self.scale_ = None
 
         return self
 
@@ -131,8 +157,8 @@ class NormScaler(BaseEstimator, TransformerMixin):
         if self.mean_ is not None:
             X = X - self.mean_
 
-        if self.norm_ is not None:
-            X = X / self.norm_
+        if self.scale_ is not None:
+            X = X / self.scale_
 
         return X
 
@@ -146,8 +172,8 @@ class NormScaler(BaseEstimator, TransformerMixin):
             ---Returns---
             X: unscaled and uncentered X
         """
-        if self.norm_ is not None:
-            X = X * self.norm_
+        if self.scale_ is not None:
+            X = X * self.scale_
 
         if self.mean_ is not None:
             X = X + self.mean_
@@ -161,6 +187,7 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         ---Attributes---
         with_mean: whether to center the kernel
         with_norm: whether to scale the kernel
+        sample_weight_: sample weights from the fitting procedure
 
         ---Methods---
         fit: fit the scaler (with training data)
@@ -171,18 +198,30 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         self.with_mean = with_mean
         self.with_norm = with_norm
 
-    def fit(self, K, y=None):
+    def fit(self, K, y=None, sample_weight=None):
         """
             Compute the kernel centering and scaling
 
             ---Arguments---
             K: kernel with which to compute the centering and/or scaling
+            y: ignored
+            sample_weight: sample weights for weighted mean centering
         """
+
+        if sample_weight is not None:
+            sample_weight = sample_weight / np.sum(sample_weight)
+
+        self.sample_weight_ = sample_weight
+
         if self.with_mean:
-            self.centerer_ = KernelCenterer().fit(K)
-            Kc = self.centerer.transform(K)
+            self.K_fit_rows_ = np.average(K, weights=self.sample_weight_, axis=0)
+            self.K_fit_all_ = np.average(self.K_fit_rows_, weights=self.sample_weight_)
+            Kc = K - self.K_fit_rows_[:, np.newaxis] \
+                    - np.average(K, weights=self.sample_weight_, axis=1) \
+                    + self.K_fit_all
         else:
-            self.centerer_ = None
+            self.k_fit_rows_ = None
+            self.k_fit_all_ = None
             Kc = K
 
         if self.with_norm:
@@ -203,12 +242,14 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
             K: centered and/or scaled kernel
         """
         if self.centerer_ is not None:
-            K = self.centerer_.transform(K)
+            Kc = K - self.K_fit_rows_[:, np.newaxis] \
+                    - np.average(K, weights=self.sample_weight_, axis=1) \
+                    + self.K_fit_all
 
         if self.norm_ is not None:
-            K = K / self.norm_
+            Kc = K / self.norm_
 
-        return K
+        return Kc
 
     def inverse_transform(self, K):
         """
@@ -224,9 +265,9 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
             K = K * self.norm_
 
         if self.centerer_ is not None:
-            K_fit_rows = self.centerer_.K_fit_rows_
-            K_fit_all = self.centerer_.K_fit_all_
-            K_pred_cols = np.mean(K, axis=1)
+            K_fit_rows = self.K_fit_rows_
+            K_fit_all = self.K_fit_all_
+            K_pred_cols = np.average(K, weights=self.sample_weight_, axis=1)
             K = K - K_fit_all + K_pred_cols + K_fit_rows
 
         return K
@@ -297,6 +338,7 @@ class KernelLoader(BaseEstimator, TransformerMixin):
 
         return self.K[idxs.flatten(), :][:, self.idxs_train]     
 
+# This doesn't work very well b/c of what looks like machine precision errors
 #class MalleableGaussianKernel(object):
 #    def __init__(self, delta=1.0E-12, max_terms=15):
 #        self.delta = delta
@@ -436,6 +478,145 @@ class SampleSelector(BaseEstimator, TransformerMixin):
 
         return iT
 
+class SampleWeightModel(BaseEstimator, TransformerMixin):
+    """
+        Wrapper class for passing sample weights as 
+        either y or the last column of y
+
+        ---Attributes---
+        model: model that will be (deep) copied and used
+            to fit/transform the (weighted) data
+        model_: fitted model
+        weight_col: the column of y that contains the weights.
+
+        ---Methods---
+        fit: fit the model with sample weights
+        transform: transform with the weighted model
+        inverse_transform: inverse transform with the weighted model
+
+    """
+    def __init__(self, model=None, weight_col=None):
+        self.model = model
+        self.model_ = None
+        self.weight_col = weight_col
+
+    def fit(self, X, y=None, **fit_params):
+        """
+            Copy and fit the stored model
+
+            ---Arguments---
+            X: data used to fit the model
+            y: if weight_col is None, the y data with which to fit
+                the model. If weight_col is an integer,
+                y[:, weight_col] is extracted as the sample weights,
+                and the rest of y is used to fit the model
+            fit_params: additional parameters for fitting the model
+
+            ---Returns---
+            self: fitted wrapper model
+        """
+
+        if y is not None and weight_col is not None:
+            y = np.array(y)
+            if y.ndim == 2:
+                sample_weight = y[:, weight_col]
+                y = np.delete(y, weight_col, axis=1)
+            elif y.ndim == 1:
+                sample_weight = y
+                y = None
+        else:
+            sample_weight = None
+
+        if self.model is not None:
+            self.model_ = deepcopy(self.model)
+            self.model_.fit(X, y=y, sample_weight=sample_weight, **fit_params)
+
+        return self
+
+    def transform(self, X):
+        """
+            Transform according to the stored model
+
+            ---Arguments---
+            X: data to transform
+
+            ---Returns---
+            T: transformed data
+        """
+        if self.model_ is not None:
+            T = self.model_.transform(X)
+        else:
+            T = X
+        return T
+
+    def inverse_transform(self, X):
+        """
+            Inverse transform according to the stored model
+
+            ---Arguments---
+            X: data to inverse transform
+
+            ---Returns---
+            iT: inverse transformed data
+        """
+        if self.model_ is not None:
+            iT = self.model_.inverse_transform(X)
+        else:
+            iT = X
+        return iT
+
+def sample_weight_scorer(
+    y_true, y_pred, 
+    scorer=mean_absolute_error, 
+    **kwargs
+):
+    """
+        Wrapper function to use scorers that score with
+        sample weighting in sklearn pipelines and cross-validation
+
+        ---Arguments---
+        y_true: the indices on which the score will be computed
+        y_pred: the predictions to score
+        scorer: the scoring function to use, that has the call signature
+            (y_true, y_pred, **kwargs)
+        kwargs: additional keyword arguments to pass to the scorer
+
+        ---Returns---
+        score: score computed on the indices idxs according
+            to the scorer
+    """
+    sample_weight = y_true[:, -1]
+    sample_weight = sample_weight / np.sum(sample_weight)
+    score = scorer(y_true, y_pred, sample_weight=sample_weight, **kwargs)
+
+    return score
+
+def balanced_class_weights(labels):
+    """
+        Computes balanced class weights based
+        on a set of labels
+
+        ---Arguments---
+        labels: class labels
+
+        ---Returns---
+        sample_weight: balanced class weights for each
+            label. Weights for class i are computed as:
+            n_samples / (n_classes * n_i),
+            where n_i is the population of class i
+    """
+    n_samples = len(labels)
+    unique_labels, label_counts = np.unique(labels, return_counts=True)
+    n_classes = len(unique_labels)
+
+    sample_weight = np.zeros(n_samples)
+    for ul, lc in zip(unique_labels, label_counts):
+        label_weight = n_samples / (n_classes * lc)
+        sample_weight[labels == ul] = label_weight
+
+    sample_weight /= np.sum(sample_weight)
+    return sample_weight
+
 def score_by_index(idxs, y_pred, y=None, scorer=mean_absolute_error, **kwargs):
     """
         Wrapper function to use scorers that select by index
@@ -471,28 +652,28 @@ def score_by_index(idxs, y_pred, y=None, scorer=mean_absolute_error, **kwargs):
 
     return score
 
-def cv_generator(cv_idxs):
-    """
-        A generator yielding (train, test) tuples
-        from a precomputed set of folds, in the shape
-        (n_samples_in_fold, n_folds)
-
-        ---Arguments---
-        cv_idxs: a 2D matrix of folds, with shape
-            (n_samples_in_fold, n_folds)
-
-        ---Yields---
-        train_idxs: indices for training, from k-1 folds
-        test_idxs: indices for validation, a single fold
-    """
-
-    k = cv_idxs.shape[1]
-    for kdx in range(0, k):
-        k_list = list(range(0, k))
-        k_list.pop(kdx)
-        test_idxs = cv_idxs[:, kdx]
-        train_idxs = np.concatenate(cv_idxs[:, k_list])
-        yield train_idxs, test_idxs
+#def cv_generator(cv_idxs):
+#    """
+#        A generator yielding (train, test) tuples
+#        from a precomputed set of folds, in the shape
+#        (n_samples_in_fold, n_folds)
+#
+#        ---Arguments---
+#        cv_idxs: a 2D matrix of folds, with shape
+#            (n_samples_in_fold, n_folds)
+#
+#        ---Yields---
+#        train_idxs: indices for training, from k-1 folds
+#        test_idxs: indices for validation, a single fold
+#    """
+#
+#    k = cv_idxs.shape[1]
+#    for kdx in range(0, k):
+#        k_list = list(range(0, k))
+#        k_list.pop(kdx)
+#        test_idxs = cv_idxs[:, kdx]
+#        train_idxs = np.concatenate(cv_idxs[:, k_list])
+#        yield train_idxs, test_idxs
 
 def get_optimal_parameters(cv_results, scoring, **base_parameters):
     """
