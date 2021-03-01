@@ -216,12 +216,14 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         if self.with_mean:
             self.K_fit_rows_ = np.average(K, weights=self.sample_weight_, axis=0)
             self.K_fit_all_ = np.average(self.K_fit_rows_, weights=self.sample_weight_)
-            Kc = K - self.K_fit_rows_[:, np.newaxis] \
-                    - np.average(K, weights=self.sample_weight_, axis=1) \
-                    + self.K_fit_all
+            Kc = K - self.K_fit_rows_ \
+                - np.average(
+                    K, weights=self.sample_weight_, axis=1
+                )[:, np.newaxis] \
+                + self.K_fit_all
         else:
-            self.k_fit_rows_ = None
-            self.k_fit_all_ = None
+            self.K_fit_rows_ = None
+            self.K_fit_all_ = None
             Kc = K
 
         if self.with_norm:
@@ -242,47 +244,71 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
             K: centered and/or scaled kernel
         """
         if self.centerer_ is not None:
-            Kc = K - self.K_fit_rows_[:, np.newaxis] \
-                    - np.average(K, weights=self.sample_weight_, axis=1) \
-                    + self.K_fit_all
+            Kc = K - self.K_fit_rows_ \
+                - np.average(
+                    K, weights=self.sample_weight_, axis=1
+                )[:, np.newaxis] \
+                + self.K_fit_all
 
         if self.norm_ is not None:
             Kc = K / self.norm_
 
         return Kc
 
-    def inverse_transform(self, K):
+class KernelConstructor(BaseEstimator, TransformerMixin):
+    """
+        Class to for building kernels with the custom
+        kernel functions
+
+        ---Attributes---
+        kernel_params: dictionary of parameters passed
+            to the kernel functions
+        kernel: 'gaussian' or 'linear' kernel
+        kernel_: kernel function
+
+        ---Methods---
+        fit: Store the training data
+        transform: compute the kernel
+
+    """
+    def __init__(self, kernel='linear', kernel_params=None):
+        self.kernel_params = kernel_params
+        self.kernel = kernel
+        self.kernel_ = None
+
+    def fit(self, X, y=None):
         """
-            Undo centering and scaling of a kernel
+            Store the training data on which we base the kernel
 
             ---Arguments---
-            K: kernel on which to undo the centering and/or scaling
+            X: data
+            y: ignored
 
             ---Returns---
-            K: uncentered and unscaled kernel
+            self
         """
-        if self.norm_ is not None:
-            K = K * self.norm_
 
-        if self.centerer_ is not None:
-            K_fit_rows = self.K_fit_rows_
-            K_fit_all = self.K_fit_all_
-            K_pred_cols = np.average(K, weights=self.sample_weight_, axis=1)
-            K = K - K_fit_all + K_pred_cols + K_fit_rows
+        # Need to do the function selection in fit
+        # otherwise a pipeline can't clone the class
+        if self.kernel == 'linear':
+            self.kernel_ = linear_kernel
+        elif self.kernel == 'gaussian':
+            self.kernel_ = gaussian_kernel
 
-        return K
+        self.X_train_ = X
+        return self
 
-# TODO: linear kernel option as well?
-#class KernelConstructor(BaseEstimator, TransformerMixin):
-#    def __init__(self, gamma=1.0):
-#        self.gamma = gamma
-#
-#    def fit(self, X, y=None):
-#        self.X_train = X
-#        return self
-#
-#    def transform(self, X):
-#        return gaussian_kernel(X, self.X_train, gamma=self.gamma)
+    def transform(self, X):
+        """
+            Compute the kernel
+
+            ---Arguments---
+            X: compute the kernel between X and self.X_train_
+
+            ---Returns---
+            K: the kernel
+        """
+        return self.kernel_(X, self.X_train_, **self.kernel_params)
 
 class KernelLoader(BaseEstimator, TransformerMixin):
     """
@@ -433,7 +459,7 @@ class SampleSelector(BaseEstimator, TransformerMixin):
 
         if self.model is not None:
             self.model_ = deepcopy(self.model)
-            self.model_.fit(self.X[idxs.flatten()], **fit_params)
+            self.model_.fit(self.X[idxs], **fit_params)
 
         return self
 
@@ -452,9 +478,9 @@ class SampleSelector(BaseEstimator, TransformerMixin):
         """
 
         if self.model_ is not None:
-            T = self.model_.transform(self.X[idxs.flatten()])
+            T = self.model_.transform(self.X[idxs])
         else:
-            T = self.X[idxs.flatten()]
+            T = self.X[idxs]
 
         return T
 
@@ -644,7 +670,7 @@ def score_by_index(idxs, y_pred, y=None, scorer=mean_absolute_error, **kwargs):
     # so we only need to extract the reference data y
     # at the appropriate indices
     if y is not None:
-        score = scorer(y[idxs.flatten()], y_pred, **kwargs)
+        score = scorer(y[idxs], y_pred, **kwargs)
 
     # Functions as a normal scorer if y is not provided
     else:
