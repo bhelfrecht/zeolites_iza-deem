@@ -220,7 +220,7 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
                 - np.average(
                     K, weights=self.sample_weight_, axis=1
                 )[:, np.newaxis] \
-                + self.K_fit_all
+                + self.K_fit_all_
         else:
             self.K_fit_rows_ = None
             self.K_fit_all_ = None
@@ -243,12 +243,12 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
             ---Returns---
             K: centered and/or scaled kernel
         """
-        if self.centerer_ is not None:
+        if self.K_fit_all_ is not None:
             Kc = K - self.K_fit_rows_ \
                 - np.average(
                     K, weights=self.sample_weight_, axis=1
                 )[:, np.newaxis] \
-                + self.K_fit_all
+                + self.K_fit_all_
 
         if self.norm_ is not None:
             Kc = K / self.norm_
@@ -271,7 +271,7 @@ class KernelConstructor(BaseEstimator, TransformerMixin):
         transform: compute the kernel
 
     """
-    def __init__(self, kernel='linear', kernel_params=None):
+    def __init__(self, kernel='linear', kernel_params={}):
         self.kernel_params = kernel_params
         self.kernel = kernel
         self.kernel_ = None
@@ -345,7 +345,7 @@ class KernelLoader(BaseEstimator, TransformerMixin):
             self: fitted kernel loader
         """
         self.K = load_hdf5(self.filename, **self.load_args)
-        self.idxs_train = idxs.flatten()
+        self.idxs_train = idxs
         return self
 
     def transform(self, idxs):
@@ -362,7 +362,7 @@ class KernelLoader(BaseEstimator, TransformerMixin):
                 passed during the fit
         """
 
-        return self.K[idxs.flatten(), :][:, self.idxs_train]     
+        return self.K[idxs, :][:, self.idxs_train]     
 
 class SampleSelector(BaseEstimator, TransformerMixin):
     """
