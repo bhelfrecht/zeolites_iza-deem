@@ -135,8 +135,12 @@ class StandardNormScaler(BaseEstimator, TransformerMixin):
                     self.scale_ = np.sqrt(np.sum(feature_variances))
             elif self.scale_type == 'norm':
                 if self.featurewise:
+                    if Xc.ndim > 1:
+                        n_cols = Xc.shape[1]
+                    else:
+                        n_cols = 1
                     self.scale_ = np.linalg.norm(Xc, axis=0) \
-                        / np.sqrt(Xc.shape[0] / Xc.shape[1])
+                        / np.sqrt(Xc.shape[0] / n_cols)
                 else:
                     self.scale_ = np.linalg.norm(Xc) / np.sqrt(Xc.shape[0])
         else:
