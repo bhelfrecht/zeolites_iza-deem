@@ -783,6 +783,40 @@ def df_to_class(df, df_type, n_classes):
 
     return predicted_class
 
+def rank_models(models, keys=None, separator='_'):
+    """
+        Get a subset of models corresponding to the given keys
+
+        ---Arguments---
+        models: dictionary with format {model_key: score}
+        keys: list of keys to search for in the model_key
+        separator: split separator for the string of keys.
+            Used to determine exact matches to keys
+
+        ---Returns---
+        candidate_models: Model tuples with the format (model_key, score)
+            matching the provided keys. Candidates are sorted
+            by decreasing score
+    """
+        
+    # Create a list of the relevant models
+    if keys is not None:
+        candidate_models = [
+            (k, v) for k, v in models.items() if all(
+                [key in k.split(separator) for key in keys]
+            )
+        ]
+    else:
+        candidate_models = [
+            (k, v) for k, v in models.items()
+        ]
+
+    # Sort the candidates by score
+    candidate_models = sorted(
+        candidate_models, key=lambda item: item[1], reverse=True
+    )
+    return candidate_models
+
 def generate_reports(cantons_train, cantons_test,
         predicted_cantons_train, predicted_cantons_test,
         class_names=None):
