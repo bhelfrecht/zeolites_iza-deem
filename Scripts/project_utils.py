@@ -455,10 +455,10 @@ class SampleSelector(BaseEstimator, TransformerMixin):
 
         return iT
 
-class SampleWeightModel(BaseEstimator, TransformerMixin):
+class SampleWeightSelector(BaseEstimator, TransformerMixin):
     """
         Wrapper class for passing sample weights as 
-        either y or the last column of y
+        a column of X
 
         ---Attributes---
         model: model that will be (deep) copied and used
@@ -482,27 +482,18 @@ class SampleWeightModel(BaseEstimator, TransformerMixin):
             Copy and fit the stored model
 
             ---Arguments---
-            X: data used to fit the model
-            y: if weight_col is None, the y data with which to fit
-                the model. If weight_col is an integer,
-                y[:, weight_col] is extracted as the sample weights,
-                and the rest of y is used to fit the model
+            X: data used to fit the model.
+                If weight_col is not None, the weight_col-th
+                column of X is extracted and used as the sample weights
+                for the underlying model
+            y: ignored and passed to the underlying model
             fit_params: additional parameters for fitting the model
 
             ---Returns---
             self: fitted wrapper model
         """
 
-        if y is not None and weight_col is not None:
-            y = np.array(y)
-            if y.ndim == 2:
-                sample_weight = y[:, weight_col]
-                y = np.delete(y, weight_col, axis=1)
-            elif y.ndim == 1:
-                sample_weight = y
-                y = None
-        else:
-            sample_weight = None
+        X, sample_weight = extract_weights(X, self.weight_col)
 
         if self.model is not None:
             self.model_ = deepcopy(self.model)
@@ -520,10 +511,13 @@ class SampleWeightModel(BaseEstimator, TransformerMixin):
             ---Returns---
             T: transformed data
         """
+        X, _ = extract_weights(X, self.weight_col)
+
         if self.model_ is not None:
             T = self.model_.transform(X)
         else:
             T = X
+
         return T
 
     def inverse_transform(self, X):
@@ -540,11 +534,45 @@ class SampleWeightModel(BaseEstimator, TransformerMixin):
             iT = self.model_.inverse_transform(X)
         else:
             iT = X
+
         return iT
+
+def extract_weights(X, weight_col=None):
+    """
+        Extracts a column of weights from a matrix
+
+        ---Arguments---
+        X: matrix
+        weight_col: index of the column of X
+            that contains the sample weights
+
+        ---Returns---
+        X: X with sample weights extracted
+        sample_weight: sample weights extracted from X
+    """
+
+    if weight_col is not None:
+        if X.ndim == 1:
+            raise IndexError(
+                'X must be at least 2D if it contains weights'
+            )
+        elif weight_col > X.shape[1]:
+            raise IndexError(
+                'Index of column containing the weights '
+                'exceeds the number of columns in X'
+            )
+        sample_weight = X[:, weight_col]
+        sample_weight = sample_weight / np.sum(sample_weight)
+        X = np.delete(X, weight_col, axis=1)
+    else:
+        sample_weight = None
+
+    return X, sample_weight
 
 def sample_weight_scorer(
     y_true, y_pred, 
     scorer=mean_absolute_error, 
+    weight_col=None,
     **kwargs
 ):
     """
@@ -554,6 +582,7 @@ def sample_weight_scorer(
         ---Arguments---
         y_true: the indices on which the score will be computed
         y_pred: the predictions to score
+        weight_col: the column of y_true that contains the weights.
         scorer: the scoring function to use, that has the call signature
             (y_true, y_pred, **kwargs)
         kwargs: additional keyword arguments to pass to the scorer
@@ -562,7 +591,7 @@ def sample_weight_scorer(
         score: score computed on the indices idxs according
             to the scorer
     """
-    sample_weight = y_true[:, -1]
+    y_true, sample_weight = extract_weights(y_true, weight_col)
     sample_weight = sample_weight / np.sum(sample_weight)
     score = scorer(y_true, y_pred, sample_weight=sample_weight, **kwargs)
 
