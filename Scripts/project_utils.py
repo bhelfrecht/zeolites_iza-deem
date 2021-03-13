@@ -10,6 +10,10 @@ from sklearn.utils.multiclass import _ovr_decision_function
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.compose import TransformedTargetRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.base import clone
+from skcosmo.decomposition import PCovR
 
 sys.path.append('/home/helfrech/Tools/Toolbox/utils')
 from kernels import build_kernel
@@ -409,7 +413,7 @@ class SampleSelector(BaseEstimator, TransformerMixin):
         """
 
         if self.model is not None:
-            self.model_ = deepcopy(self.model)
+            self.model_ = clone(self.model)
             self.model_.fit(self.X[idxs], **fit_params)
 
         return self
@@ -455,7 +459,7 @@ class SampleSelector(BaseEstimator, TransformerMixin):
 
         return iT
 
-class SampleWeightSelector(BaseEstimator, TransformerMixin):
+class DataSplitter(BaseEstimator, TransformerMixin):
     """
         Wrapper class for passing sample weights as 
         a column of X
@@ -472,9 +476,11 @@ class SampleWeightSelector(BaseEstimator, TransformerMixin):
         inverse_transform: inverse transform with the weighted model
 
     """
-    def __init__(self, model=None, weight_col=None):
+    def __init__(self, model=None, X_cols=[], y_cols=[], weight_col=None):
         self.model = model
         self.model_ = None
+        self.X_cols = X_cols
+        self.y_cols = y_cols
         self.weight_col = weight_col
 
     def fit(self, X, y=None, **fit_params):
@@ -493,13 +499,44 @@ class SampleWeightSelector(BaseEstimator, TransformerMixin):
             self: fitted wrapper model
         """
 
-        X, sample_weight = extract_weights(X, self.weight_col)
+        X, y, sample_weight = split_data(
+            X, 
+            X_cols=self.X_cols, 
+            y_cols=self.y_cols, 
+            weight_col=self.weight_col
+        )
 
         if self.model is not None:
-            self.model_ = deepcopy(self.model)
-            self.model_.fit(X, y=y, sample_weight=sample_weight, **fit_params)
+            self.model_ = clone(self.model)
+            self.model_.fit(
+                X, y=y, sample_weight=sample_weight, **fit_params
+            )
 
         return self
+
+    def predict(self, X):
+        """
+            Predict according to the stored model
+
+            ---Arguments---
+            X: data to predict on
+
+            ---Returns---
+            y: predicted targets
+        """
+        X, _, _ = split_data(
+            X, 
+            X_cols=self.X_cols, 
+            y_cols=[], 
+            weight_col=None
+        )
+
+        if self.model_ is not None:
+            T = self.model_.predict(X)
+        else:
+            T = X
+
+        return T
 
     def transform(self, X):
         """
@@ -511,7 +548,12 @@ class SampleWeightSelector(BaseEstimator, TransformerMixin):
             ---Returns---
             T: transformed data
         """
-        X, _ = extract_weights(X, self.weight_col)
+        X, _, _ = split_data(
+            X, 
+            X_cols=self.X_cols, 
+            y_cols=[], 
+            weight_col=None
+        )
 
         if self.model_ is not None:
             T = self.model_.transform(X)
@@ -537,12 +579,39 @@ class SampleWeightSelector(BaseEstimator, TransformerMixin):
 
         return iT
 
-def extract_weights(X, weight_col=None):
+    def score(self, X, y=None):
+        """
+            Get a score using the underlying model
+
+            ---Arguments---
+            X: concatenated data to score
+            y: ignored
+
+            ---Returns---
+            score: score from the model, if implemented
+        """
+        X, y, sample_weight = split_data(
+            X, 
+            X_cols=self.X_cols, 
+            y_cols=self.y_cols, 
+            weight_col=self.weight_col
+        )
+
+        if self.model_ is not None:
+            score = self.model_.score(X, y=y, sample_weight=sample_weight)
+        else:
+            score = None
+
+        return score
+
+def split_data(X, X_cols=[], y_cols=[], weight_col=None):
     """
         Extracts a column of weights from a matrix
 
         ---Arguments---
         X: matrix
+        X_cols: columns of X to be used as X (the predictor data)
+        y_cols: columns of X to be used as y
         weight_col: index of the column of X
             that contains the sample weights
 
@@ -552,35 +621,65 @@ def extract_weights(X, weight_col=None):
     """
 
     if weight_col is not None:
-        if X.ndim == 1:
-            raise IndexError(
-                'X must be at least 2D if it contains weights'
-            )
-        elif weight_col > X.shape[1]:
-            raise IndexError(
-                'Index of column containing the weights '
-                'exceeds the number of columns in X'
-            )
         sample_weight = X[:, weight_col]
         sample_weight = sample_weight / np.sum(sample_weight)
-        X = np.delete(X, weight_col, axis=1)
     else:
         sample_weight = None
 
-    return X, sample_weight
+    return X[:, X_cols], X[:, y_cols], sample_weight
+
+def weighted_estimator_score(
+    estimator, X, y, greater_is_better=True, X_cols=[], weight_col=None
+):
+    """
+        Function to compute a weighted estimator score
+        in a GridSearchCV
+
+        ---Arguments---
+        estimator: estimator to use to compute the score
+        X: data with which to compute the score
+        y: ground truth targets
+
+        ---Returns---
+        score: weighted estimator score
+
+    """
+
+    y, _, sample_weight = split_data(y, X_cols=X_cols, weight_col=weight_col)
+
+    if isinstance(estimator, Pipeline):
+        X_transformer = estimator[0:-1]
+        estimator = estimator[-1]
+
+    if isinstance(estimator, TransformedTargetRegressor):
+        y_transformer = estimator.transformer_
+        estimator = estimator.regressor_
+
+    if isinstance(y_transformer, DataSplitter):
+        y = np.column_stack((y, sample_weight))
+
+    if greater_is_better:
+        sign = 1.0
+    else:
+        sign = -1.0
+
+    score = estimator.score(
+        X_transformer.transform(X), 
+        y_transformer.transform(y), 
+        sample_weight=sample_weight
+    )
+
+    return sign * score
 
 def sample_weight_scorer(
-    y_true, y_pred, 
-    scorer=mean_absolute_error, 
-    weight_col=None,
-    **kwargs
+    y_true, y_pred, scorer=mean_absolute_error, weight_col=None, **kwargs
 ):
     """
         Wrapper function to use scorers that score with
         sample weighting in sklearn pipelines and cross-validation
 
         ---Arguments---
-        y_true: the indices on which the score will be computed
+        y_true: the ground truth targets
         y_pred: the predictions to score
         weight_col: the column of y_true that contains the weights.
         scorer: the scoring function to use, that has the call signature
@@ -591,37 +690,13 @@ def sample_weight_scorer(
         score: score computed on the indices idxs according
             to the scorer
     """
-    y_true, sample_weight = extract_weights(y_true, weight_col)
-    sample_weight = sample_weight / np.sum(sample_weight)
+    y_cols = np.delete(np.arange(0, y_true.shape[1], dtype=int), weight_col)
+    y_true, _, sample_weight = split_data(
+        y_true, X_cols=y_cols, weight_col=weight_col
+    )
     score = scorer(y_true, y_pred, sample_weight=sample_weight, **kwargs)
 
     return score
-
-def balanced_class_weights(labels):
-    """
-        Computes balanced class weights based
-        on a set of labels
-
-        ---Arguments---
-        labels: class labels
-
-        ---Returns---
-        sample_weight: balanced class weights for each
-            label. Weights for class i are computed as:
-            n_samples / (n_classes * n_i),
-            where n_i is the population of class i
-    """
-    n_samples = len(labels)
-    unique_labels, label_counts = np.unique(labels, return_counts=True)
-    n_classes = len(unique_labels)
-
-    sample_weight = np.zeros(n_samples)
-    for ul, lc in zip(unique_labels, label_counts):
-        label_weight = n_samples / (n_classes * lc)
-        sample_weight[labels == ul] = label_weight
-
-    sample_weight /= np.sum(sample_weight)
-    return sample_weight
 
 def score_by_index(idxs, y_pred, y=None, scorer=mean_absolute_error, **kwargs):
     """
@@ -657,6 +732,32 @@ def score_by_index(idxs, y_pred, y=None, scorer=mean_absolute_error, **kwargs):
         score = scorer(idxs, y_pred, **kwargs)
 
     return score
+
+def balanced_class_weights(labels):
+    """
+        Computes balanced class weights based
+        on a set of labels
+
+        ---Arguments---
+        labels: class labels
+
+        ---Returns---
+        sample_weight: balanced class weights for each
+            label. Weights for class i are computed as:
+            n_samples / (n_classes * n_i),
+            where n_i is the population of class i
+    """
+    n_samples = len(labels)
+    unique_labels, label_counts = np.unique(labels, return_counts=True)
+    n_classes = len(unique_labels)
+
+    sample_weight = np.zeros(n_samples)
+    for ul, lc in zip(unique_labels, label_counts):
+        label_weight = n_samples / (n_classes * lc)
+        sample_weight[labels == ul] = label_weight
+
+    sample_weight /= np.sum(sample_weight)
+    return sample_weight
 
 def get_optimal_parameters(cv_results, scoring, **base_parameters):
     """
