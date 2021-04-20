@@ -10,7 +10,8 @@ from sklearn.utils.multiclass import _ovr_decision_function
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.compose import TransformedTargetRegressor
+from sklearn.compose import TransformedTargetRegressor, ColumnTransformer
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.base import clone
 from skcosmo.decomposition import PCovR
@@ -617,7 +618,93 @@ class DataSplitter(BaseEstimator, TransformerMixin):
 
         return score
 
-def split_data(X, X_cols=[], y_cols=[], weight_col=None):
+class ClassBalancedPipeline(Pipeline):
+    """
+        Modified Pipeline class to internally
+        assign fit_params for sample weights.
+        Useful for use in CV objects where
+        the samples should be weighted based
+        on the class populations of the folds
+
+        ---Methods---
+        fit: set fit_params and fit the pipeline
+    """
+
+    def fit(self, X, y=None, keys=[], **fit_params):
+        """
+            Fit the pipeline
+
+            ---Arguments---
+            X: X data for the fit
+            y: target data for the fit
+            keys: fit_params keys for balanced class weights
+            fit_params: additional fit parameters for the pipeline
+        """
+        if len(keys) > 0:
+            sample_weight = balanced_class_weights(y)
+            for key in keys:
+                fit_params[key] = sample_weight
+
+        super().fit(X, y=y, **fit_params)
+
+class ReplicatedStratifiedKFold(StratifiedKFold):
+    """
+        Class to replicate the indices from
+        a StratifiedKFold split to achieve class parity
+
+        ---Attributes---
+        stratify_col: column index of y on which to stratify
+            the folds
+        all other attributes: see sklearn StratifiedKFold documentation
+
+        ---Methods---
+        split: split the dataset into folds
+    """
+    def __init__(
+        self, 
+        n_splits=5, 
+        *,  
+        stratify_col=None, 
+        shuffle=False, 
+        random_state=None
+    ):
+        super().__init__(
+            n_splits=n_splits, 
+            shuffle=shuffle, 
+            random_state=random_state
+        )
+        self.stratify_col = stratify_col
+
+    def split(self, X, y, groups=None):
+        """
+            Split into folds and replicate minority classes
+
+            ---Arguments---
+            X: X data (dummy data can be provided)
+            y: y data for the stratification,
+                with an auxiliary column containing class labels
+                (if y is not already class labels)
+            groups: ignored
+        """
+
+        if self.stratify_col is not None:
+            y = y[:, self.stratify_col] 
+
+        for train_idxs, test_idxs in super().split(X, y, groups=groups):
+            repeat_idxs = n_repeats(y[train_idxs])
+
+            yield np.repeat(train_idxs, repeat_idxs), test_idxs
+
+class ColumnTransformerInverse(ColumnTransformer):
+    """
+        ColumnTransformer with a dummy inverse_transform
+        function so it can be used for target data
+        in a TransformedTargetRegressor
+    """
+    def inverse_transform(self, X):
+        return X
+
+def split_data(X, X_cols=[], y_cols=[], aux_col=None):
     """
         Extracts a column of weights from a matrix
 
@@ -642,11 +729,52 @@ def split_data(X, X_cols=[], y_cols=[], weight_col=None):
 
     return X[:, X_cols], X[:, y_cols], aux
 
-def weighted_estimator_score(
-    estimator, X, y, greater_is_better=True, X_cols=[], weight_col=None
-):
+def n_repeats(class_array):
     """
-        Function to compute a weighted estimator score
+        Replicate samples to achieve approximately
+        equal class samples
+
+        ---Arguments---
+        class_array: array of class labels
+
+        ---Returns---
+        class_repeats: number or repeats for each class
+            required to reach class parity
+    """
+
+    class_labels = np.unique(class_array)
+    class_counts = np.array(
+        [np.count_nonzero(class_array == label) for label in class_labels]
+    )
+    class_replicas = np.around(
+        np.amax(class_counts) / class_counts
+    ).astype(int)
+                    
+    class_repeats = np.zeros(len(class_array), dtype=int)
+    for label, replica in zip(class_labels, class_replicas):
+        class_repeats[class_array == label] = replica
+                                            
+    return class_repeats
+
+def normalize_weights(sample_weight):
+    """
+       Normalize a set weights to have sum 1
+
+       ---Arguments---
+       sample_weight: weights
+
+       ---Returns---
+       sample_weight: weights normalized so that they sum to 1
+    """
+
+    if sample_weight is not None:
+        sample_weight = sample_weight / np.sum(sample_weight)
+
+    return sample_weight
+
+def pcovr_score(estimator, X, y):
+    """
+        Function to compute a PCovR score
         in a GridSearchCV
 
         ---Arguments---
@@ -659,8 +787,7 @@ def weighted_estimator_score(
 
     """
 
-    y, _, sample_weight = split_data(y, X_cols=X_cols, weight_col=weight_col)
-
+    # Need to transform X and Y data before scoring
     if isinstance(estimator, Pipeline):
         X_transformer = estimator[0:-1]
         estimator = estimator[-1]
@@ -669,23 +796,85 @@ def weighted_estimator_score(
         y_transformer = estimator.transformer_
         estimator = estimator.regressor_
 
-    if isinstance(y_transformer, DataSplitter):
-        y = np.column_stack((y, sample_weight))
-
-    if greater_is_better:
-        sign = 1.0
-    else:
-        sign = -1.0
-
     score = estimator.score(
         X_transformer.transform(X), 
-        y_transformer.transform(y), 
-        sample_weight=sample_weight
+        y_transformer.transform(y).squeeze(), 
     )
 
-    return sign * score
+    return score
 
-def sample_weight_scorer(
+def class_balanced_pcovr_score(estimator, X, y, class_col=-1):
+    """
+        Function to compute a class-balanced PCovR score
+        in a GridSearchCV
+
+        ---Arguments---
+        estimator: estimator to use to compute the score
+        X: data with which to compute the score
+        y: ground truth targets
+        class_col: the column of y that contains the class labels.
+
+        ---Returns---
+        score: weighted estimator score
+    """
+    class_labels = y[:, class_col]
+    unique_labels, label_counts = np.unique(class_labels, return_counts=True)
+
+    # Need to transform X and Y data before scoring
+    if isinstance(estimator, Pipeline):
+        X_transformer = estimator[0:-1]
+        estimator = estimator[-1]
+
+    if isinstance(estimator, TransformedTargetRegressor):
+        y_transformer = estimator.transformer_
+        estimator = estimator.regressor_
+
+    class_scores = np.zeros(len(unique_labels))
+    for cdx, cl in enumerate(unique_labels):
+        class_idxs = np.nonzero(class_labels == cl)[0]
+        class_scores[cdx] = estimator.score(
+            X_transformer.transform(X[class_idxs]),
+            y_transformer.transform(y[class_idxs]).squeeze()
+        )
+
+    return np.mean(class_scores)
+
+def class_balanced_metric_score(
+    y_true, y_pred, scorer=mean_absolute_error, class_col=None, **kwargs
+):
+    """
+        Wrapper function for computing
+        class-balanced score metrics
+        in sklearn pipelines and cross-validation
+        (most useful for regression estimators)
+
+        ---Arguments---
+        y_true: the ground truth targets
+        y_pred: the predictions to score
+        class_col: the column of y_true that contains the class labels.
+        scorer: the scoring function to use, that has the call signature
+            (y_true, y_pred, **kwargs)
+        kwargs: additional keyword arguments to pass to the scorer
+
+        ---Returns---
+        score: score computed on the indices idxs according
+            to the scorer
+    """
+    y_cols = np.delete(np.arange(0, y_true.shape[1], dtype=int), class_col)
+    y_true, _, class_labels = split_data(
+        y_true, X_cols=y_cols, aux_col=class_col
+    )
+    unique_labels, label_counts = np.unique(class_labels, return_counts=True)
+    class_scores = np.zeros(len(unique_labels))
+    for cdx, cl in enumerate(unique_labels):
+        class_idxs = np.nonzero(class_labels == cl)[0]
+        class_scores[cdx] = scorer(
+            y_true[class_idxs], y_pred[class_idxs], **kwargs
+        )
+
+    return np.mean(class_scores)
+
+def sample_weight_score(
     y_true, y_pred, scorer=mean_absolute_error, weight_col=None, **kwargs
 ):
     """
