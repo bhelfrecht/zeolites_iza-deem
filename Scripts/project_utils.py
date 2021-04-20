@@ -222,13 +222,21 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
         self.sample_weight_ = sample_weight
 
         if self.with_mean:
-            self.K_fit_rows_ = np.average(K, weights=self.sample_weight_, axis=0)
-            self.K_fit_all_ = np.average(self.K_fit_rows_, weights=self.sample_weight_)
-            Kc = K - self.K_fit_rows_ \
-                - np.average(
-                    K, weights=self.sample_weight_, axis=1
-                )[:, np.newaxis] \
+            self.K_fit_rows_ = np.average(
+                K, weights=self.sample_weight_, axis=0
+            )
+            self.K_fit_all_ = np.average(
+                self.K_fit_rows_, weights=self.sample_weight_
+            )
+            K_pred_cols_ = np.average(
+                K, weights=self.sample_weight_, axis=1
+            )[:, np.newaxis]
+
+            Kc = (
+                K - self.K_fit_rows_
+                - K_pred_cols_
                 + self.K_fit_all_
+            )
         else:
             self.K_fit_rows_ = None
             self.K_fit_all_ = None
@@ -252,11 +260,14 @@ class KernelNormScaler(BaseEstimator, TransformerMixin):
             K: centered and/or scaled kernel
         """
         if self.K_fit_all_ is not None:
-            Kc = K - self.K_fit_rows_ \
-                - np.average(
-                    K, weights=self.sample_weight_, axis=1
-                )[:, np.newaxis] \
+            K_pred_cols_ = np.average(
+                K, weights=self.sample_weight_, axis=1
+            )[:, np.newaxis]
+            Kc = (
+                K - self.K_fit_rows_
+                - K_pred_cols_
                 + self.K_fit_all_
+            )
 
         if self.norm_ is not None:
             Kc = K / self.norm_
