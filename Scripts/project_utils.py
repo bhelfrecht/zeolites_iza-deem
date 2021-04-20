@@ -514,8 +514,9 @@ class DataSplitter(BaseEstimator, TransformerMixin):
             X, 
             X_cols=self.X_cols, 
             y_cols=self.y_cols, 
-            weight_col=self.weight_col
+            aux_col=self.weight_col
         )
+        sample_weight = normalize_weights(sample_weight)
 
         if self.model is not None:
             self.model_ = clone(self.model)
@@ -539,7 +540,7 @@ class DataSplitter(BaseEstimator, TransformerMixin):
             X, 
             X_cols=self.X_cols, 
             y_cols=[], 
-            weight_col=None
+            aux_col=None
         )
 
         if self.model_ is not None:
@@ -563,7 +564,7 @@ class DataSplitter(BaseEstimator, TransformerMixin):
             X, 
             X_cols=self.X_cols, 
             y_cols=[], 
-            weight_col=None
+            aux_col=None
         )
 
         if self.model_ is not None:
@@ -605,8 +606,9 @@ class DataSplitter(BaseEstimator, TransformerMixin):
             X, 
             X_cols=self.X_cols, 
             y_cols=self.y_cols, 
-            weight_col=self.weight_col
+            aux_col=self.weight_col
         )
+        sample_weight = normalize_weights(sample_weight)
 
         if self.model_ is not None:
             score = self.model_.score(X, y=y, sample_weight=sample_weight)
@@ -623,21 +625,22 @@ def split_data(X, X_cols=[], y_cols=[], weight_col=None):
         X: matrix
         X_cols: columns of X to be used as X (the predictor data)
         y_cols: columns of X to be used as y
-        weight_col: index of the column of X
-            that contains the sample weights
+        aux_col: index of the column of X
+            that contains auxiliary information 
+            (e.g., class labels, sample weights)
 
         ---Returns---
-        X: X with sample weights extracted
-        sample_weight: sample weights extracted from X
+        X: X data extracted from X
+        y: y data extracted from X
+        aux: auxiliary data extracted from X
     """
 
-    if weight_col is not None:
-        sample_weight = X[:, weight_col]
-        sample_weight = sample_weight / np.sum(sample_weight)
+    if aux_col is not None:
+        aux = X[:, aux_col]
     else:
-        sample_weight = None
+        aux = None
 
-    return X[:, X_cols], X[:, y_cols], sample_weight
+    return X[:, X_cols], X[:, y_cols], aux
 
 def weighted_estimator_score(
     estimator, X, y, greater_is_better=True, X_cols=[], weight_col=None
@@ -703,8 +706,9 @@ def sample_weight_scorer(
     """
     y_cols = np.delete(np.arange(0, y_true.shape[1], dtype=int), weight_col)
     y_true, _, sample_weight = split_data(
-        y_true, X_cols=y_cols, weight_col=weight_col
+        y_true, X_cols=y_cols, aux_col=weight_col
     )
+    sample_weight = normalize_weights(sample_weight)
     score = scorer(y_true, y_pred, sample_weight=sample_weight, **kwargs)
 
     return score
