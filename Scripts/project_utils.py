@@ -1050,8 +1050,7 @@ def load_hdf5(filename, datasets=None, indices=None, concatenate=False):
             numpy indexing.
         concatenate: whether to concatenate the loaded datasets
             into a single array. If only one dataset is present,
-            use `concatenate=True` to return the array
-            instead of a one-element list
+            the data array is returned instead of a single-element list.
         ---Returns---
         dataset_values: data loaded from the HDF5 file
     """
