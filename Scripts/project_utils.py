@@ -704,6 +704,15 @@ class ColumnTransformerInverse(ColumnTransformer):
     def inverse_transform(self, X):
         return X
 
+class TransformedTargetRegressorTransformer(TransformedTargetRegressor):
+    """
+        TransformedTargetRegressor with a transform
+        function that calls transform on the regressor,
+        so that it can be used with (K)PCovR
+    """
+    def transform(self, X):
+        return self.regressor_.transform(X)
+
 def split_data(X, X_cols=[], y_cols=[], aux_col=None):
     """
         Extracts a column of weights from a matrix
