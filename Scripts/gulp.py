@@ -204,7 +204,6 @@ def structure_summary(output, gulp_dir, gulp_glob, ref_dir, ref_ext,
 
         gulp_cif = read(gulp_file)
         gulp_cif.wrap(eps=wrapeps)
-
         ref_xyz = read(ref_file)
         ref_xyz.wrap(eps=wrapeps)
 
@@ -258,6 +257,8 @@ def structure_summary(output, gulp_dir, gulp_glob, ref_dir, ref_ext,
             
         else:
             cell_error = np.linalg.norm(ref_xyz.cell[:] - gulp_cif.cell[:])
+
+            # To get RMSE, square, divide by n_atoms, and take sqrt
             pos_error = distance(ref_xyz, gulp_cif)
 
         g.write(f'\n{basename:7s}  {cell_error:15.8f}  {pos_error:15.8f}')
