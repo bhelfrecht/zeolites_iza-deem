@@ -16,7 +16,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.base import clone
 from skcosmo.decomposition import PCovR
 
-sys.path.append('/home/helfrech/Tools/Toolbox/utils')
 from kernels import build_kernel
 from kernels import center_kernel_fast, center_kernel_oos_fast
 from kernels import gaussian_kernel, linear_kernel
