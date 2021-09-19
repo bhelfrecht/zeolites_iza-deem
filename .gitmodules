@@ -1,0 +1,18 @@
+[submodule "Code/scikit-cosmo"]
+	path = Code/scikit-cosmo
+	url = https://github.com/bhelfrecht/scikit-cosmo.git
+[submodule "Code/GCH"]
+	path = Code/GCH
+	url = https://github.com/bhelfrecht/GCH.git
+[submodule "Code/chemiscope"]
+	path = Code/chemiscope
+	url = https://github.com/cosmo-epfl/chemiscope.git
+[submodule "Code/librascal"]
+	path = Code/librascal
+	url = https://github.com/cosmo-epfl/librascal.git
+[submodule "Code/cosmo-tools"]
+	path = Code/cosmo-tools
+	url = https://github.com/cosmo-epfl/cosmo-tools.git
+[submodule "Code/utils"]
+	path = Code/utils
+	url = git@github.com:bhelfrecht/utils.git
